@@ -13,10 +13,12 @@ dependencies = [
     "pydantic>=2.12.4",
     "pyyaml>=6.0.3",
     "sentence-transformers>=5.1.2",
+    "tqdm>=4.67.1",
 ]
 
 [dependency-groups]
 dev = [
     "types-aiofiles>=25.1.0.20251011",
     "types-pyyaml>=6.0.12.20250915",
+    "types-tqdm>=4.67.0.20250809",
 ]

@@ -8,6 +8,7 @@ import aiofiles
 import aiohttp
 from llama_cpp import CreateCompletionResponse, Llama
 from openai import OpenAI
+from tqdm import tqdm
 
 from src.config import CloudModelConfig, Config, LocalModelConfig, ModelConfig
 
@@ -147,9 +148,21 @@ async def download_model(url: str, dest: Path, chunk_size: int = 64 * 1024) -> N
         async with session.get(url) as resp:
             resp.raise_for_status()
 
-            async with aiofiles.open(dest, mode="wb") as fp:
-                async for chunk in resp.content.iter_chunked(chunk_size):
-                    await fp.write(chunk)
+            total = int(resp.headers.get("Content-Length") or 0)
+
+            with tqdm(
+                total=total,
+                unit="B",
+                unit_scale=True,  # e.g. 1.5 MiB instead of 1572864 B
+                unit_divisor=1024,
+                desc=dest.name,
+                dynamic_ncols=True,  # auto‑adjust width
+                colour="cyan"
+            ) as pbar:
+                async with aiofiles.open(dest, mode="wb") as fp:
+                    async for chunk in resp.content.iter_chunked(chunk_size):
+                        await fp.write(chunk)
+                        pbar.update(len(chunk))
 
     logging.info(f"✓ Done: {dest}")
 

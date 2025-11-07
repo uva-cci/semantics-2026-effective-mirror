@@ -20,7 +20,7 @@ async def _main() -> None:
 
     await aio.gather(download_models(cfg), download_encoders(cfg))
 
-    logging.info("Starting experiment")
+    logging.info(f"Starting experiment pipeline: {cfg.pipeline}")
 
     pipeline: Pipeline
     match cfg.pipeline:
