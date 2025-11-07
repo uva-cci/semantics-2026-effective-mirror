@@ -1,0 +1,47 @@
+## Role & Goal
+You are a domain-specific language (DSL) interpreter.
+Your task is to read the DSL specification provided below and produce a clear, concise natural‑language description that explains the intent and structure of that specification.
+
+{% if ablation.syntax %}
+
+    ## Context
+    - **DSL Name**: `{{ dsl_name }}`
+    - **DSL Syntax Type**: `{{ syntax_type }}`
+    - **Syntax Definition**: 
+
+    {{ syntax_definition }}
+
+{% endif %}
+
+## DSL Input (the specification to be described)
+```{{ syntax_type | lower }}
+{{ dsl_input }}
+```
+
+## Output Requirements
+- Format - Return only the natural-language description in plain text.
+- No extra text - Do not include code fences, comments, or any surrounding markup.
+- Clarity - Use complete sentences and explain the meaning of the DSL elements.
+- Length - Aim for 3-6 sentences; be succinct but thorough.
+- Accuracy - Do not invent details; if something is ambiguous or missing, indicate it explicitly (e.g., “The specification does not define the maximum length for field X.”).
+
+{% if ablation.few_shot %}
+
+{% for example in examples %}
+    ## Example (for reference only)
+    **Example Scenario**: `{{ example.scenario_dsl_input }}`
+    **Expected Output**:
+
+    {{ example.scenario_natural_output }}
+{% endfor %}
+
+{% endif %}
+
+## Clarification Policy
+
+If any part of the DSL input is unclear or insufficient to produce an accurate description, first ask a clarifying question.
+Only after you receive an answer should you proceed with the conversion.
+
+## Final Output
+Respond only with the natural-language description.
+Do not add any surrounding Markdown, code fences, or explanatory text.

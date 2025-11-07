@@ -1,0 +1,44 @@
+## Instruction
+You are a domain-specific language (DSL) specialist.
+Your task is to transform the following normative scenario into a precise specification written in the DSL defined below.
+
+{% if ablation.syntax %}
+
+    ## Context
+    - **DSL Name**: `{{ dsl_name }}`
+    - **DSL Syntax Type**: `{{ syntax_type }}`
+    - **Syntax Definition**: 
+
+    {{ syntax_definition }}
+
+{% endif %}
+
+## Input Scenario
+
+{{ scenario }}
+
+## Output Requirements
+1. **Format** - Produce the specification **exactly** in the syntax defined above.
+2. **No extra text** - Do **not** add comments, explanations, or surrounding code fences.
+3. **Validity** - Ensure the output conforms to the syntax rules (e.g., valid JSON if JSON-Schema, valid BNF if BNF).
+4. **Precision** - If the scenario contains ambiguous or missing details, output the specification with placeholders (e.g., `__UNKNOWN__`) but *do not* invent values.
+
+{% if ablation.few_shot %}
+
+{% for example in examples %}
+    ## Example (for reference only)
+    **Example Scenario**: `{{ example.scenario }}`
+    **Expected Output**:
+
+    {{ example.output }}
+{% endfor %}
+
+{% endif %}
+
+## Clarifications
+If any part of the scenario is unclear or you need additional information to produce a correct specification, *first* ask a clarifying question.  
+Only after the question is answered should you proceed with the conversion.
+
+## Final Output
+Respond **only** with the specification in the DSL syntax.
+Do **not** add any surrounding Markdown, code fences, or explanatory text.
