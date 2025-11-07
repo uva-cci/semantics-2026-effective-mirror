@@ -1,0 +1,64 @@
+pipeline: mirroring
+
+dsl:
+  - name: eflint
+    validation:
+      - kind: json-schema
+        path: data/dsl/eflint/eflint-3.0.0.schema.json
+      - kind: bnf
+        path: data/dsl/eflint/grammar.bnf
+
+  - name: odrl
+    validation:
+      - kind: json-ld
+        path: data/dsl/odrl/odrl-2.2.ld.json
+
+  - name: dcpl
+    validation:
+      - kind: json-schema
+        path: data/dsl/dcpl/schema.json
+
+  - name: symboleo
+    validation:
+      - kind: bnf
+        path: data/dsl/symboleo/grammar.bnf
+
+models:
+  - name: llama2-7b-chat
+    meta:
+      kind: local
+      url: https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGUF/resolve/main/llama-2-7b-chat.Q8_0.gguf
+
+  - name: phi3-mini
+    meta:
+      kind: local
+      url: https://huggingface.co/QuantFactory/Phi-3-mini-128k-instruct-GGUF/resolve/main/Phi-3-mini-128k-instruct.Q8_0.gguf
+
+  - name: gpt-oss-20b
+    meta:
+      kind: local
+      url: https://huggingface.co/ggml-org/gpt-oss-20b-GGUF/resolve/main/gpt-oss-20b-mxfp4.gguf
+
+encodings:
+  - name: nomic-embed-text-v1
+    org: nomic-ai
+
+  - name: nomic-embed-text-v1.5
+    org: nomic-ai
+
+  - name: text-embedding-ada-002
+    org: openai
+
+  - name: jina-embeddings-v2-base-en
+    org: jinaai
+
+  - name: jina-embeddings-v3
+    org: jinaai
+
+  - name: e5-base-v2
+    org: intfloat
+
+inference:
+  temperature: [0.0, 0.2, 0.5, 0.8, 1.0]
+  top_p: [0.8, 0.9, 0.95, 0.99]
+  top_k: [40, 80, 200, 0]

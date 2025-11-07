@@ -134,3 +134,9 @@ cython_debug/
 
 # macOS
 .DS_Store
+
+# project-specifics
+data/encoders/**
+!data/encoders/.gitkeep
+data/models/**
+!data/models/.gitkeep

@@ -4,7 +4,19 @@ version = "0.1.0"
 description = "A reproduction package for the relative workshop paper."
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = ["pydantic>=2.12.4", "pyyaml>=6.0.3"]
+dependencies = [
+    "aiofiles>=25.1.0",
+    "aiohttp>=3.13.2",
+    "einops>=0.8.1",
+    "llama-cpp-python>=0.3.16",
+    "openai>=2.7.1",
+    "pydantic>=2.12.4",
+    "pyyaml>=6.0.3",
+    "sentence-transformers>=5.1.2",
+]
 
 [dependency-groups]
-dev = ["types-pyyaml>=6.0.12.20250915"]
+dev = [
+    "types-aiofiles>=25.1.0.20251011",
+    "types-pyyaml>=6.0.12.20250915",
+]
