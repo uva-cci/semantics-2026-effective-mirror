@@ -1,0 +1,723 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gitlab.com/eflint/json-specification/-/raw/main/eflint-3.0.0.schema.json",
+  "title": "eFLINT JSON‑Specification v3.0.0",
+  "description": "Schema for the eFLINT JSON‑Specification v3.0.0 (draft‑2020‑12).",
+  "$defs": {
+    "error": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "message": { "type": "string" }
+      },
+      "required": ["id", "message"],
+      "additionalProperties": false
+    },
+
+    "domainSets": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/expression" }
+    },
+    "domainRange": {
+      "type": "object",
+      "properties": {
+        "start": { "type": "integer" },
+        "end": { "type": "integer" }
+      },
+      "required": ["start", "end"],
+      "additionalProperties": false
+    },
+    "domain": {
+      "oneOf": [
+        { "$ref": "#/$defs/domainSets" },
+        { "$ref": "#/$defs/domainRange" }
+      ]
+    },
+
+    "primitiveExpression": {
+      "type": ["string", "number", "boolean"],
+      "not": { "type": "object" }
+    },
+
+    "variableReferenceExpression": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "items": { "type": "string" }
+    },
+
+    "constructorApplicationExpression": {
+      "type": "object",
+      "properties": {
+        "identifier": { "type": "string" },
+        "operands": { "$ref": "#/$defs/constructorInput" }
+      },
+      "required": ["identifier", "operands"],
+      "additionalProperties": false
+    },
+
+    "operatorExpression": {
+      "type": "object",
+      "properties": {
+        "operator": { "$ref": "#/$defs/operator" },
+        "operands": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/expression" }
+        }
+      },
+      "required": ["operator", "operands"],
+      "additionalProperties": false
+    },
+
+    "iteratorExpression": {
+      "type": "object",
+      "properties": {
+        "iterator": { "$ref": "#/$defs/iteratorOperator" },
+        "binds": { "type": "array", "items": { "type": "string" } },
+        "expression": { "$ref": "#/$defs/expression" }
+      },
+      "required": ["iterator", "binds", "expression"],
+      "additionalProperties": false
+    },
+
+    "projectionExpression": {
+      "type": "object",
+      "properties": {
+        "parameter": { "type": "string" },
+        "operand": { "$ref": "#/$defs/expression" }
+      },
+      "required": ["parameter", "operand"],
+      "additionalProperties": false
+    },
+
+    "expression": {
+      "oneOf": [
+        { "$ref": "#/$defs/primitiveExpression" },
+        { "$ref": "#/$defs/variableReferenceExpression" },
+        { "$ref": "#/$defs/constructorApplicationExpression" },
+        { "$ref": "#/$defs/operatorExpression" },
+        { "$ref": "#/$defs/iteratorExpression" },
+        { "$ref": "#/$defs/projectionExpression" }
+      ]
+    },
+
+    "constructorInputArray": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/expression" }
+    },
+    "constructorInputMap": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/expression" }
+    },
+    "constructorInput": {
+      "oneOf": [
+        { "$ref": "#/$defs/constructorInputArray" },
+        { "$ref": "#/$defs/constructorInputMap" }
+      ]
+    },
+
+    "operator": {
+      "type": "string",
+      "enum": [
+        "AND",
+        "OR",
+        "NOT",
+        "EQ",
+        "NE",
+        "GT",
+        "GE",
+        "LT",
+        "LE",
+        "ADD",
+        "SUB",
+        "MUL",
+        "DIV",
+        "MOD",
+        "COUNT",
+        "SUM",
+        "MAX",
+        "MIN",
+        "WHEN",
+        "WHERE",
+        "HOLDS",
+        "ENABLED",
+        "VIOLATED"
+      ]
+    },
+
+    "iteratorOperator": {
+      "type": "string",
+      "enum": ["FOREACH", "EXISTS", "FORALL"]
+    },
+
+    "trigger": {
+      "type": "object",
+      "properties": {
+        "kind": { "type": "string", "enum": ["act", "event"] },
+        "parent": {
+          "anyOf": [
+            { "$ref": "#/$defs/constructorApplicationExpression" },
+            { "type": "null" }
+          ]
+        },
+        "instances": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/constructorApplicationExpression" }
+        }
+      },
+      "required": ["kind", "instances"],
+      "additionalProperties": false
+    },
+
+    "violation": {
+      "type": "object",
+      "properties": {
+        "kind": { "type": "string", "enum": ["act", "duty", "invariant"] },
+        "identifier": { "type": "string" },
+        "operands": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/expression" }
+        }
+      },
+      "required": ["kind", "identifier", "operands"],
+      "additionalProperties": false
+    },
+
+    "phrase": {
+      "type": "object",
+      "properties": {
+        "kind": { "type": "string" },
+        "stateless": { "type": "boolean" },
+        "updates": { "type": "boolean" }
+      },
+      "required": ["kind"],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "bquery" } } },
+          "then": {
+            "required": ["expression"],
+            "properties": { "expression": { "$ref": "#/$defs/expression" } }
+          }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "iquery" } } },
+          "then": {
+            "required": ["expression"],
+            "properties": {
+              "expression": { "$ref": "#/$defs/expression" },
+              "when-holds": { "type": "boolean" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "create" } } },
+          "then": {
+            "required": ["operand"],
+            "properties": { "operand": { "$ref": "#/$defs/expression" } }
+          }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "terminate" } } },
+          "then": {
+            "required": ["operand"],
+            "properties": { "operand": { "$ref": "#/$defs/expression" } }
+          }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "obfuscate" } } },
+          "then": {
+            "required": ["operand"],
+            "properties": { "operand": { "$ref": "#/$defs/expression" } }
+          }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "trigger" } } },
+          "then": {
+            "required": ["operand"],
+            "properties": { "operand": { "$ref": "#/$defs/expression" } }
+          }
+        },
+
+        {
+          "if": { "properties": { "kind": { "const": "afact" } } },
+          "then": {
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string" },
+              "type": { "type": "string" },
+              "range": { "$ref": "#/$defs/domain" },
+              "is-var": { "type": "boolean" },
+              "derived-from": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/expression" }
+              },
+              "holds-when": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/expression" }
+              },
+              "conditioned-by": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/expression" }
+              }
+            }
+          }
+        },
+
+        {
+          "if": { "properties": { "kind": { "const": "cfact" } } },
+          "then": {
+            "required": ["name", "identified-by"],
+            "properties": {
+              "name": { "type": "string" },
+              "identified-by": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "is-var": { "type": "boolean" },
+              "derived-from": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/expression" }
+              },
+              "holds-when": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/expression" }
+              },
+              "conditioned-by": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/expression" }
+              }
+            }
+          }
+        },
+
+        {
+          "if": { "properties": { "kind": { "const": "ffact" } } },
+          "then": {
+            "required": ["name", "identified-by"],
+            "properties": {
+              "name": { "type": "string" },
+              "identified-by": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": { "type": "string" }
+              },
+              "derived-from": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/expression" }
+              },
+              "holds-when": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/expression" }
+              },
+              "conditioned-by": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/expression" }
+              }
+            }
+          }
+        },
+
+        {
+          "if": { "properties": { "kind": { "const": "placeholder" } } },
+          "then": {
+            "required": ["name", "for"],
+            "properties": {
+              "name": { "type": "array", "items": { "type": "string" } },
+              "for": { "type": "string" }
+            }
+          }
+        },
+
+        {
+          "if": { "properties": { "kind": { "const": "predicate" } } },
+          "then": {
+            "required": ["name", "expression"],
+            "properties": {
+              "name": { "type": "string" },
+              "is-invariant": { "type": "boolean" },
+              "expression": { "$ref": "#/$defs/expression" }
+            }
+          }
+        },
+
+        {
+          "if": { "properties": { "kind": { "const": "event" } } },
+          "then": {
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string" },
+              "related-to": { "type": "array", "items": { "type": "string" } },
+              "derived-from": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/expression" }
+              },
+              "holds-when": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/expression" }
+              },
+              "conditioned-by": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/expression" }
+              },
+              "syncs-with": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/expression" }
+              },
+              "creates": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/expression" }
+              },
+              "terminates": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/expression" }
+              },
+              "obfuscates": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/expression" }
+              }
+            }
+          }
+        },
+
+        {
+          "if": { "properties": { "kind": { "const": "act" } } },
+          "then": {
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string" },
+              "actor": { "type": "string" },
+              "recipient": { "type": "string" },
+              "related-to": { "type": "array", "items": { "type": "string" } },
+              "derived-from": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/expression" }
+              },
+              "holds-when": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/expression" }
+              },
+              "conditioned-by": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/expression" }
+              },
+              "syncs-with": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/expression" }
+              },
+              "creates": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/expression" }
+              },
+              "terminates": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/expression" }
+              },
+              "obfuscates": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/expression" }
+              }
+            }
+          }
+        },
+
+        {
+          "if": { "properties": { "kind": { "const": "duty" } } },
+          "then": {
+            "required": ["name", "holder", "claimant"],
+            "properties": {
+              "name": { "type": "string" },
+              "holder": { "type": "string" },
+              "claimant": { "type": "string" },
+              "related-to": { "type": "array", "items": { "type": "string" } },
+              "derived-from": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/expression" }
+              },
+              "holds-when": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/expression" }
+              },
+              "conditioned-by": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/expression" }
+              },
+              "violated-when": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/expression" }
+              },
+              "enforced-by": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        },
+
+        {
+          "if": { "properties": { "kind": { "const": "extend" } } },
+          "then": {
+            "required": ["parent-kind", "name"],
+            "properties": {
+              "parent-kind": { "type": "string" },
+              "name": { "type": "string" },
+              "identified-by": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "derived-from": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/expression" }
+              },
+              "holds-when": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/expression" }
+              },
+              "conditioned-by": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/expression" }
+              },
+              "syncs-with": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/expression" }
+              },
+              "creates": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/expression" }
+              },
+              "terminates": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/expression" }
+              },
+              "obfuscates": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/expression" }
+              },
+              "violated-when": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/expression" }
+              },
+              "enforced-by": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        }
+      ]
+    },
+
+    "phraseGroup": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/phrase" }
+    },
+
+    "phraseResult": {
+      "type": "object",
+      "properties": {
+        "success": { "type": "boolean" },
+        "errors": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/error" }
+        }
+      },
+      "required": ["success"],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": { "properties": { "result": { "type": "boolean" } } },
+          "then": { "required": ["result"] }
+        },
+        {
+          "if": { "properties": { "result": { "type": "array" } } },
+          "then": {
+            "required": ["result"],
+            "properties": {
+              "result": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/expression" }
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "changes": { "type": "array" } } },
+          "then": {
+            "required": ["changes", "triggers", "violated"],
+            "properties": {
+              "changes": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/phrase" }
+              },
+              "triggers": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/trigger" }
+              },
+              "violated": { "type": "boolean" },
+              "violations": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/violation" }
+              }
+            }
+          }
+        }
+      ]
+    },
+
+    "requestCommon": {
+      "type": "object",
+      "properties": {
+        "version": { "type": "string" },
+        "extensions": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "kind": { "type": "string" }
+      },
+      "required": ["version", "kind"],
+      "additionalProperties": false
+    },
+
+    "pingRequest": {
+      "allOf": [
+        { "$ref": "#/$defs/requestCommon" },
+        { "properties": { "kind": { "const": "ping" } }, "required": ["kind"] }
+      ]
+    },
+    "handshakeRequest": {
+      "allOf": [
+        { "$ref": "#/$defs/requestCommon" },
+        {
+          "properties": { "kind": { "const": "handshake" } },
+          "required": ["kind"]
+        }
+      ]
+    },
+    "phrasesRequest": {
+      "allOf": [
+        { "$ref": "#/$defs/requestCommon" },
+        {
+          "properties": { "kind": { "const": "phrases" } },
+          "required": ["kind"]
+        },
+        {
+          "required": ["phrases"],
+          "properties": {
+            "phrases": { "$ref": "#/$defs/phraseGroup" },
+            "updates": { "type": "boolean" }
+          }
+        }
+      ]
+    },
+    "inspectRequest": {
+      "allOf": [
+        { "$ref": "#/$defs/requestCommon" },
+        {
+          "properties": { "kind": { "const": "inspect" } },
+          "required": ["kind"]
+        },
+        {
+          "properties": {
+            "targets": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      ]
+    },
+
+    "request": {
+      "oneOf": [
+        { "$ref": "#/$defs/pingRequest" },
+        { "$ref": "#/$defs/handshakeRequest" },
+        { "$ref": "#/$defs/phrasesRequest" },
+        { "$ref": "#/$defs/inspectRequest" }
+      ]
+    },
+
+    "responseCommon": {
+      "type": "object",
+      "properties": {
+        "success": { "type": "boolean" },
+        "errors": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/error" }
+        }
+      },
+      "required": ["success"],
+      "additionalProperties": false
+    },
+
+    "pingResponse": {
+      "allOf": [{ "$ref": "#/$defs/responseCommon" }]
+    },
+    "handshakeResponse": {
+      "allOf": [
+        { "$ref": "#/$defs/responseCommon" },
+        {
+          "properties": {
+            "supported-versions": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "supported-extensions": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                }
+              }
+            },
+            "reasoner": { "type": "string" },
+            "reasoner-version": { "type": "string" },
+            "shares-updates": { "type": "boolean" },
+            "shares-triggers": { "type": "boolean" },
+            "shares-violations": { "type": "boolean" },
+            "instance-timeout": { "type": "integer" }
+          },
+          "required": ["supported-versions"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "phrasesResponse": {
+      "allOf": [
+        { "$ref": "#/$defs/responseCommon" },
+        {
+          "properties": {
+            "results": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/phraseResult" }
+            }
+          },
+          "required": ["results"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "inspectResponse": {
+      "allOf": [
+        { "$ref": "#/$defs/responseCommon" },
+        {
+          "properties": {
+            "phrases": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/phrase" }
+            }
+          },
+          "required": ["phrases"],
+          "additionalProperties": false
+        }
+      ]
+    },
+
+    "response": {
+      "oneOf": [
+        { "$ref": "#/$defs/pingResponse" },
+        { "$ref": "#/$defs/handshakeResponse" },
+        { "$ref": "#/$defs/phrasesResponse" },
+        { "$ref": "#/$defs/inspectResponse" }
+      ]
+    }
+  },
+
+  "oneOf": [{ "$ref": "#/$defs/request" }, { "$ref": "#/$defs/response" }],
+
+  "additionalProperties": false
+}

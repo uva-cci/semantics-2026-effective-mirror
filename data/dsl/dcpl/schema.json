@@ -1,0 +1,313 @@
+{
+  "$schema": "http://json-schema.org/draft/2020-12/schema",
+  "title": "DPCL",
+  "description": "This document records a subset of instructions of a DPCL program",
+  "type": "array",
+  "items": {
+    "$ref": "#/$defs/directive"
+  },
+  "minItems": 0,
+  "$defs": {
+    "external_expression": {
+      "type": "string"
+    },
+    "atomic_object": {
+      "type": "string",
+      "pattern": "^(\\*|(~)?[a-z][_\\-a-zA-Z0-9]*)$"
+    },
+    "atomic_params": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/atomic_event"
+        },
+        {
+          "$ref": "#/$defs/atomic_object"
+        }
+      ]
+    },
+    "power_position": {
+      "type": "string",
+      "pattern": "^(power|liability|disability|immunity)$"
+    },
+    "deontic_position": {
+      "type": "string",
+      "pattern": "^(duty|prohibition|liberty|claim|protection|no-claim)$"
+    },
+    "refinement": {
+      "type": "object"
+    },
+    "refined_object": {
+      "type": "object",
+      "properties": {
+        "reference": {
+          "$ref": "#/$defs/atomic_object"
+        },
+        "refinement": {
+          "$ref": "#/$defs/refinement"
+        },
+        "alias": {
+          "$ref": "#/$defs/atomic_object"
+        }
+      }
+    },
+    "agent": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/atomic_object"
+        },
+        {
+          "$ref": "#/$defs/refined_object"
+        }
+      ]
+    },
+    "object": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/atomic_object"
+        },
+        {
+          "$ref": "#/$defs/refined_object"
+        },
+        {
+          "$ref": "#/$defs/power_frame"
+        },
+        {
+          "$ref": "#/$defs/deontic_frame"
+        }
+      ]
+    },
+    "atomic_event": {
+      "type": "string",
+      "pattern": "^(~)?#[a-z][_a-zA-Z0-9]*$"
+    },
+    "refined_event": {
+      "type": "object",
+      "properties": {
+        "reference": {
+          "$ref": "#/$defs/atomic_event"
+        },
+        "refinement": {
+          "$ref": "#/$defs/refinement"
+        },
+        "alias": {
+          "$ref": "#/$defs/atomic_event"
+        }
+      },
+      "required": ["reference", "refinement"],
+      "additionalProperties": false
+    },
+    "transition_event": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/production_event"
+        },
+        {
+          "$ref": "#/$defs/naming_event"
+        }
+      ]
+    },
+    "production_event": {
+      "type": "object",
+      "properties": {
+        "plus": {
+          "$ref": "#/$defs/object"
+        },
+        "minus": {
+          "$ref": "#/$defs/object"
+        }
+      },
+      "oneOf": [
+        {
+          "required": ["plus"]
+        },
+        {
+          "required": ["minus"]
+        }
+      ],
+      "additionalProperties": false
+    },
+    "naming_event": {
+      "type": "object",
+      "properties": {
+        "entity": {
+          "$ref": "#/$defs/object"
+        },
+        "in": {
+          "$ref": "#/$defs/object"
+        },
+        "out": {
+          "$ref": "#/$defs/object"
+        }
+      },
+      "oneOf": [
+        {
+          "required": ["entity", "in"]
+        },
+        {
+          "required": ["entity", "out"]
+        }
+      ],
+      "additionalProperties": false
+    },
+    "event": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/atomic_event"
+        },
+        {
+          "$ref": "#/$defs/refined_event"
+        },
+        {
+          "$ref": "#/$defs/transition_event"
+        },
+        {
+          "$ref": "#/$defs/naming_event"
+        }
+      ]
+    },
+    "transformational_rule": {
+      "type": "object",
+      "properties": {
+        "condition": {
+          "$ref": "#/$defs/object"
+        },
+        "conclusion": {
+          "$ref": "#/$defs/object"
+        },
+        "alias": {
+          "$ref": "#/$defs/atomic_object"
+        }
+      },
+      "required": ["condition", "conclusion"],
+      "additionalProperties": false
+    },
+    "reactive_rule": {
+      "type": "object",
+      "properties": {
+        "event": {
+          "$ref": "#/$defs/event"
+        },
+        "reaction": {
+          "$ref": "#/$defs/transition_event"
+        },
+        "alias": {
+          "$ref": "#/$defs/atomic_object"
+        }
+      },
+      "required": ["reaction"],
+      "additionalProperties": false
+    },
+    "power_frame": {
+      "type": "object",
+      "properties": {
+        "position": {
+          "$ref": "#/$defs/power_position"
+        },
+        "holder": {
+          "$ref": "#/$defs/agent"
+        },
+        "action": {
+          "$ref": "#/$defs/event"
+        },
+        "consequence": {
+          "$ref": "#/$defs/transition_event"
+        },
+        "alias": {
+          "$ref": "#/$defs/atomic_object"
+        }
+      },
+      "required": ["position", "action", "consequence"],
+      "additionalProperties": false
+    },
+    "deontic_frame": {
+      "type": "object",
+      "properties": {
+        "position": {
+          "$ref": "#/$defs/deontic_position"
+        },
+        "holder": {
+          "$ref": "#/$defs/agent"
+        },
+        "counterparty": {
+          "$ref": "#/$defs/agent"
+        },
+        "action": {
+          "$ref": "#/$defs/event"
+        },
+        "violation": {
+          "type": "object",
+          "properties": {
+            "expression": {
+              "$ref": "#/$defs/external_expression"
+            },
+            "event": {
+              "$ref": "#/$defs/event"
+            },
+            "alias": {
+              "$ref": "#/$defs/atomic_object"
+            }
+          },
+          "additionalProperties": false
+        },
+        "termination": {
+          "type": "object",
+          "properties": {
+            "expression": {
+              "$ref": "#/$defs/external_expression"
+            },
+            "event": {
+              "$ref": "#/$defs/event"
+            }
+          },
+          "additionalProperties": false
+        },
+        "alias": {
+          "$ref": "#/$defs/atomic_object"
+        }
+      },
+      "required": ["position", "action"],
+      "additionalProperties": false
+    },
+    "compound_frame": {
+      "type": "object",
+      "properties": {
+        "compound": {
+          "$ref": "#/$defs/atomic_object"
+        },
+        "params": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/atomic_params"
+          }
+        },
+        "content": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/directive"
+          }
+        }
+      },
+      "required": ["compound", "content"],
+      "additionalProperties": false
+    },
+    "directive": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/transformational_rule"
+        },
+        {
+          "$ref": "#/$defs/reactive_rule"
+        },
+        {
+          "$ref": "#/$defs/deontic_frame"
+        },
+        {
+          "$ref": "#/$defs/power_frame"
+        },
+        {
+          "$ref": "#/$defs/compound_frame"
+        }
+      ]
+    }
+  }
+}
