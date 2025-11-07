@@ -144,7 +144,10 @@ async def download_model(url: str, dest: Path, chunk_size: int = 64 * 1024) -> N
 
     logging.info(f"Downloading {url} → {dest}")
 
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(
+        # downloads are several GBs large and take time
+        timeout=aiohttp.ClientTimeout(total=None, sock_read=30)
+    ) as session:
         async with session.get(url) as resp:
             resp.raise_for_status()
 
