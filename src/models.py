@@ -144,28 +144,34 @@ async def download_model(url: str, dest: Path, chunk_size: int = 64 * 1024) -> N
 
     logging.info(f"Downloading {url} → {dest}")
 
-    async with aiohttp.ClientSession(
-        # downloads are several GBs large and take time
-        timeout=aiohttp.ClientTimeout(total=None, sock_read=30)
-    ) as session:
-        async with session.get(url) as resp:
-            resp.raise_for_status()
+    try:
+        async with aiohttp.ClientSession(
+            # downloads are several GBs large and take time
+            timeout=aiohttp.ClientTimeout(total=None, sock_read=30)
+        ) as session:
+            async with session.get(url) as resp:
+                resp.raise_for_status()
 
-            total = int(resp.headers.get("Content-Length") or 0)
+                total = int(resp.headers.get("Content-Length") or 0)
 
-            with tqdm(
-                total=total,
-                unit="B",
-                unit_scale=True,  # e.g. 1.5 MiB instead of 1572864 B
-                unit_divisor=1024,
-                desc=dest.name,
-                dynamic_ncols=True,  # auto‑adjust width
-                colour="cyan"
-            ) as pbar:
-                async with aiofiles.open(dest, mode="wb") as fp:
-                    async for chunk in resp.content.iter_chunked(chunk_size):
-                        await fp.write(chunk)
-                        pbar.update(len(chunk))
+                with tqdm(
+                    total=total,
+                    unit="B",
+                    unit_scale=True,  # e.g. 1.5 MiB instead of 1572864 B
+                    unit_divisor=1024,
+                    desc=dest.name,
+                    dynamic_ncols=True,  # auto‑adjust width
+                    colour="cyan"
+                ) as pbar:
+                    async with aiofiles.open(dest, mode="wb") as fp:
+                        async for chunk in resp.content.iter_chunked(chunk_size):
+                            await fp.write(chunk)
+                            pbar.update(len(chunk))
+
+    except Exception as e:
+        # we don't want partial downloads to be interpreted as completed
+        dest.unlink()
+        raise e
 
     logging.info(f"✓ Done: {dest}")
 
