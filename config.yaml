@@ -46,9 +46,6 @@ encodings:
   - name: nomic-embed-text-v1.5
     org: nomic-ai
 
-  - name: text-embedding-ada-002
-    org: openai
-
   - name: jina-embeddings-v2-base-en
     org: jinaai
 
