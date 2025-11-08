@@ -5,11 +5,11 @@ Your task is to transform the following normative scenario into a precise specif
 {% if ablation.syntax %}
 
     ## Context
-    - **DSL Name**: `{{ dsl_name }}`
-    - **DSL Syntax Type**: `{{ syntax_type }}`
+    - **DSL Name**: `{{ dsl.name }}`
+    - **DSL Syntax Type**: `{{ validation.kind }}`
     - **Syntax Definition**: 
 
-    {{ syntax_definition }}
+    {{ validation.definition }}
 
 {% endif %}
 

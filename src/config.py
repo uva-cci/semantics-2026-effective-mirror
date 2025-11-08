@@ -6,7 +6,7 @@ import yaml
 from pydantic import BaseModel, Field, FilePath, HttpUrl
 
 
-class Pipeline(StrEnum):
+class PipelineName(StrEnum):
     MIRRORING = "mirroring"
     REASONING = "reasoning"
 
@@ -29,6 +29,7 @@ class DSLConfig(BaseModel):
 
 class LocalModelConfig(BaseModel):
     kind: Literal['local']
+    context_length: int
     url: HttpUrl
 
 
@@ -60,7 +61,8 @@ class InferenceParamsConfig(BaseModel):
 
 
 class Config(BaseModel):
-    pipeline: Pipeline
+    pipelines: list[PipelineName]
+    scenarios: pathlib.Path
     dsl: list[DSLConfig]
     models: list[ModelConfig]
     encodings: list[EmbeddingModelConfig]

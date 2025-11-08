@@ -8,9 +8,28 @@ import aiofiles
 import aiohttp
 from llama_cpp import CreateCompletionResponse, Llama
 from openai import OpenAI
+from pydantic import BaseModel
 from tqdm import tqdm
 
 from src.config import CloudModelConfig, Config, LocalModelConfig, ModelConfig
+
+
+class InferenceStats(BaseModel):
+    prompt_tokens: int = -1
+    completion_tokens: int = -1
+    total_tokens: int = -1
+
+
+class InferenceParams(BaseModel):
+    temperature: float
+    top_p: float
+    top_k: int
+
+
+class InferenceOutput(BaseModel):
+    stats: InferenceStats
+    params: InferenceParams
+    text: str
 
 
 class InferenceModel(ABC):
@@ -25,10 +44,8 @@ class InferenceModel(ABC):
     def generate(
         self,
         prompt: str,
-        temperature: float,
-        top_p: float,
-        top_k: int
-    ) -> str:
+        params: InferenceParams
+    ) -> InferenceOutput:
         """
         Return a single generated text for the given prompt.
 
@@ -36,11 +53,13 @@ class InferenceModel(ABC):
         ----------
         prompt: str
             Input prompt.
+        params: InferenceParams
+            Model-specific parameters.
 
         Returns
         -------
-        str
-            Generated text.
+        InferenceOutput
+            Generated text and stats.
         """
         ...
 
@@ -54,23 +73,40 @@ class LocalInferenceModel(InferenceModel):
         super().__init__(name)
 
         self.path = get_model_path(name)
-        self.model = Llama(model_path=str(self.path))
+        self.model = Llama(
+            model_path=str(self.path),
+            n_ctx=cfg.context_length,
+            verbose=False
+        )
 
     @override
     def generate(
         self,
         prompt: str,
-        temperature: float,
-        top_p: float,
-        top_k: int
-    ) -> str:
-        result = self.model(
+        params: InferenceParams
+    ) -> InferenceOutput:
+        result = cast(CreateCompletionResponse, self.model(
             prompt,
-            temperature=temperature,
-            top_p=top_p,
-            top_k=top_k,
+            temperature=params.temperature,
+            top_p=params.top_p,
+            top_k=params.top_k,
+        ))
+
+        stats = result.get("usage", {
+            "completion_tokens": -1,
+            "prompt_tokens": -1,
+            "total_tokens": -1
+        })
+
+        return InferenceOutput(
+            params=params,
+            text=result["choices"][0]["text"],
+            stats=InferenceStats(
+                completion_tokens=stats["completion_tokens"],
+                prompt_tokens=stats["prompt_tokens"],
+                total_tokens=stats["total_tokens"],
+            )
         )
-        return cast(CreateCompletionResponse, result)["choices"][0]["text"]
 
 
 openai_client: OpenAI
@@ -93,17 +129,24 @@ class OpenAIInferenceModel(InferenceModel):
     def generate(
         self,
         prompt: str,
-        temperature: float,
-        top_p: float,
-        top_k: int
-    ) -> str:
-        resp = openai_client.completions.create(
+        params: InferenceParams
+    ) -> InferenceOutput:
+        result = openai_client.completions.create(
             model=self.cfg.model_id,
             prompt=prompt,
-            temperature=temperature,
-            top_p=top_p,
+            temperature=params.temperature,
+            top_p=params.top_p,
         )
-        return resp.choices[0].text
+
+        return InferenceOutput(
+            params=params,
+            text=result.choices[0].text,
+            stats=InferenceStats(
+                completion_tokens=result.usage.completion_tokens,
+                prompt_tokens=result.usage.prompt_tokens,
+                total_tokens=result.usage.total_tokens,
+            ) if result.usage else InferenceStats()
+        )
 
 
 def get_model(cfg: ModelConfig) -> InferenceModel:

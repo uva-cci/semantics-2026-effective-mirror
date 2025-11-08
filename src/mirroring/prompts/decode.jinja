@@ -5,16 +5,16 @@ Your task is to read the DSL specification provided below and produce a clear, c
 {% if ablation.syntax %}
 
     ## Context
-    - **DSL Name**: `{{ dsl_name }}`
-    - **DSL Syntax Type**: `{{ syntax_type }}`
+    - **DSL Name**: `{{ dsl.name }}`
+    - **DSL Syntax Type**: `{{ validation.kind }}`
     - **Syntax Definition**: 
 
-    {{ syntax_definition }}
+    {{ validation.definition }}
 
 {% endif %}
 
 ## DSL Input (the specification to be described)
-```{{ syntax_type | lower }}
+```{{ validation.kind | lower }}
 {{ dsl_input }}
 ```
 
@@ -22,7 +22,7 @@ Your task is to read the DSL specification provided below and produce a clear, c
 - Format - Return only the natural-language description in plain text.
 - No extra text - Do not include code fences, comments, or any surrounding markup.
 - Clarity - Use complete sentences and explain the meaning of the DSL elements.
-- Length - Aim for 3-6 sentences; be succinct but thorough.
+- Length - Aim for the minimum amount of sentences (1 if possible); be succinct but thorough.
 - Accuracy - Do not invent details; if something is ambiguous or missing, indicate it explicitly (e.g., “The specification does not define the maximum length for field X.”).
 
 {% if ablation.few_shot %}

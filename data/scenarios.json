@@ -1,198 +1,247 @@
 [
   {
+    "id": "scenario-000",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "it is obligatory that j takes security measures"
   },
   {
+    "id": "scenario-001",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "it is obligatory that j brings it about that k's personal data are cancelled"
   },
   {
+    "id": "scenario-002",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "it is forbidden that j downloads copyrighted work"
   },
   {
+    "id": "scenario-003",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "it is permitted that Tony runs MySoft"
   },
   {
+    "id": "scenario-004",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "it is permitted that Tony brings it about that MySoft is installed in three computers"
   },
   {
+    "id": "scenario-005",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "in the UK, for a girl going to school, it is facultative to wear the veil"
   },
   {
+    "id": "scenario-006",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "it is obligatory that Tom pays Mary 1000 euros, in order to advance Mary's interests"
   },
   {
+    "id": "scenario-007",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "it is obligatory that Tom pays John 1000 euros, in order to advance Mary's interests"
   },
   {
+    "id": "scenario-008",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "it is obligatory, toward Mary, that Tom pays 1,000 euros to Mary"
   },
   {
+    "id": "scenario-009",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "it is obligatory, toward Tom, that Mary does not communicate to others Tom's trade secrets"
   },
   {
+    "id": "scenario-010",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "it is permitted, toward Tom, that Mary erects a building up to 15 meters high"
   },
   {
+    "id": "scenario-011",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "it is obligatory, toward Mary, that Tom pays 1,000euros to John"
   },
   {
+    "id": "scenario-012",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "Mary has an erga-omnes obligative right that nobody copies her book."
   },
   {
+    "id": "scenario-013",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "If y is x' s employee, then y has an obligative right that x does not adopt any decision impairing y' s+ employment situation on the basis of y' s race or sex"
   },
   {
+    "id": "scenario-014",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "Anyone below 18 years of age is forbidden to buy alcoholic drinks."
   },
   {
+    "id": "scenario-015",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "If Tom does not deliver the merchandise on time, then Tom becomes obliged to pay a penalty of 1,000."
   },
   {
+    "id": "scenario-016",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "If Mary renounces the payment of the penalty, then Tom ceases to be obliged to pay it."
   },
   {
+    "id": "scenario-017",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "If Tom is inside a mosque, then Tom is forbidden to wear shoes."
   },
   {
+    "id": "scenario-018",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "If Tom was born in Italy, then Tom becomes an Italian citizen."
   },
   {
+    "id": "scenario-019",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "If Tom acquires another citizenship, then Tom ceases to be an Italian citizen."
   },
   {
+    "id": "scenario-020",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "If Tom and Lisa agree to create company LegalSoft, then the company LegalSoft comes into existence."
   },
   {
+    "id": "scenario-021",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "If Tom and Lisa agree to terminate company LegalSoft, then the company LegalSoft ceases to exist."
   },
   {
+    "id": "scenario-022",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "If an object is permanently attached to the soil, then the object is an immovable good."
   },
   {
+    "id": "scenario-023",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "If Tom drives while intoxicated, then Tom commits a criminal offence."
   },
   {
+    "id": "scenario-024",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "For any persons x and y, and amount w, if x causes against y an illegal damage worth w, then the obligation that x pays compensation w to y starts"
   },
   {
+    "id": "scenario-025",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "Any piece of land, water source, tree, building, or entity which is anyway permanently attached to the land is an immovable good."
   },
   {
+    "id": "scenario-026",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "If x makes an offer to the public, containing all terms of the contract it concerns, x makes a contractual offer."
   },
   {
+    "id": "scenario-027",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "Whoever appropriates the property of others is going to be punished as a thief. The appropriator must have the intention of getting permanent possession of the stolen object. A thief does not have to intend (or need not intend) to appropriate the stolen object directly; the thief can also have the intention to provide possession to another."
   },
   {
+    "id": "scenario-028",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "If one wants to achieve the conditioned legal result in that way (that is, as resulting from a certain normative antecedent), one must bear the cost (burden or onus) of realising the additional condition."
   },
   {
+    "id": "scenario-029",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "Wild beasts, birds, fish, that is, all animals, which live either in the sea, the air, or on the earth, so soon as they are taken by any one, immediately become property of their captor."
   },
   {
+    "id": "scenario-030",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "For any person x and any animal y, if y does not belong to anybody, then x has the potestative-right to start x's ownership of the animal, by capturing y."
   },
   {
+    "id": "scenario-031",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "For any person x and any object y, if y is an original work, then x has the potestative-right to start x's copyright over y, by creating y."
   },
   {
+    "id": "scenario-032",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "If j has an obligative right to an action A then j has the potestative right to activate a sanction for the non-performance of A."
   },
   {
+    "id": "scenario-033",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "One is permitted to reproduce a protected work, but the author is entitled to a royalty for the reproduction of his or her work."
   },
   {
+    "id": "scenario-034",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "Through this contact, j's house is transferred to k for the price of 1,000,000 euros."
   },
   {
+    "id": "scenario-035",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "You are free from your obligation to me."
   },
   {
+    "id": "scenario-036",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "Whenever you get a good mark, I will be obliged to give you 10 euros."
   },
   {
+    "id": "scenario-037",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
-    "description": "It is forbidden to smoke in public spaces. "
+    "description": "It is forbidden to smoke in public spaces."
   },
   {
+    "id": "scenario-038",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "For any p, if Parliament declares p, then Parliament brings it about that p."
   },
   {
+    "id": "scenario-039",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "Use of this Web site constitutes acceptance of our Agreement and Privacy Policy."
   },
   {
+    "id": "scenario-040",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "By breaking the seal on this disk envelope you accept all the terms of the follow}ing licence"
   },
   {
+    "id": "scenario-041",
     "source": { "url": "https://w3c.github.io/odrl/bp/" },
     "description": "Movie 9898 can be used"
   },
   {
+    "id": "scenario-042",
     "source": { "url": "https://w3c.github.io/odrl/bp/" },
     "description": "John can use Movie 9898"
   },
   {
+    "id": "scenario-043",
     "source": { "url": "https://w3c.github.io/odrl/bp/" },
     "description": "Movie 9898 can be used in Germany"
   },
   {
+    "id": "scenario-044",
     "source": { "url": "https://w3c.github.io/odrl/bp/" },
     "description": "Movie 9898 can be used after 2019"
   },
   {
+    "id": "scenario-045",
     "source": { "url": "https://w3c.github.io/odrl/bp/" },
     "description": "Movie 9898 can be used in Germany after 2019"
   },
   {
+    "id": "scenario-046",
     "source": { "url": "https://w3c.github.io/odrl/bp/" },
     "description": "John must play Movie 9898"
   },
   {
+    "id": "scenario-047",
     "source": { "url": "https://w3c.github.io/odrl/bp/" },
     "description": "John is prohibited play movie 9898"
   },
   {
+    "id": "scenario-048",
     "source": { "url": "https://w3c.github.io/odrl/bp/" },
-    "description": "Alice can use Asset 1, but Bob can't”"
+    "description": "Alice can use Asset 1, but Bob can't"
   }
 ]

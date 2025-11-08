@@ -1,4 +1,8 @@
-pipeline: mirroring
+pipelines:
+  - mirroring
+  # - reasoning
+
+scenarios: data/scenarios.json
 
 dsl:
   - name: eflint
@@ -24,22 +28,34 @@ dsl:
         path: data/dsl/symboleo/grammar.bnf
 
 models:
-  - name: llama2-7b-chat
+  - name: llama3.2-1b
     meta:
       kind: local
-      url: https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGUF/resolve/main/llama-2-7b-chat.Q8_0.gguf
+      context_length: 131_072
+      url: https://huggingface.co/QuantFactory/Llama-3.2-1B-GGUF/resolve/main/Llama-3.2-1B.Q8_0.gguf
 
-  - name: phi3-mini
+  - name: qwen2.1-5b
     meta:
       kind: local
-      url: https://huggingface.co/QuantFactory/Phi-3-mini-128k-instruct-GGUF/resolve/main/Phi-3-mini-128k-instruct.Q8_0.gguf
+      context_length: 32_768
+      url: https://huggingface.co/Qwen/Qwen2-1.5B-Instruct-GGUF/resolve/main/qwen2-1_5b-instruct-q8_0.gguf
+
+  - name: gemma3.1-1b
+    meta:
+      kind: local
+      context_length: 32_768
+      url: https://huggingface.co/unsloth/gemma-3-1b-it-GGUF/resolve/main/gemma-3-1b-it-UD-Q8_K_XL.gguf
 
   - name: gpt-oss-20b
     meta:
       kind: local
+      context_length: 32_768
       url: https://huggingface.co/ggml-org/gpt-oss-20b-GGUF/resolve/main/gpt-oss-20b-mxfp4.gguf
 
 encodings:
+  - name: all-MiniLM-L6-v2
+    org: sentence-transformers
+
   - name: nomic-embed-text-v1
     org: nomic-ai
 

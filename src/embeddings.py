@@ -4,9 +4,33 @@ import logging
 from pathlib import Path
 from typing import Any, Awaitable
 
+import torch
+import torch.nn.functional as F
 from sentence_transformers import SentenceTransformer
 
 from src.config import Config, EmbeddingModelConfig
+
+
+def score_vectors(
+    a: torch.Tensor,
+    b: torch.Tensor,
+) -> float:
+    """
+    Compute a pairwise score between two embedding vectors.
+
+    Parameters
+    ----------
+    a, b : torch.Tensor
+        Embedding vectors.
+
+    Returns
+    -------
+    float
+        The computed score.
+    """
+    a_norm = F.normalize(a, p=2, dim=-1)
+    b_norm = F.normalize(b, p=2, dim=-1)
+    return float(torch.dot(a_norm, b_norm))
 
 
 def get_encoder_path(cfg: EmbeddingModelConfig) -> Path:
@@ -15,7 +39,7 @@ def get_encoder_path(cfg: EmbeddingModelConfig) -> Path:
 
 def get_encoder(cfg: EmbeddingModelConfig) -> SentenceTransformer:
     path = get_encoder_path(cfg)
-    return SentenceTransformer(str(path))
+    return SentenceTransformer(str(path), trust_remote_code=True)
 
 
 async def download_encoder(cfg: EmbeddingModelConfig) -> None:
