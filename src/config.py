@@ -1,3 +1,4 @@
+import logging
 import pathlib
 from enum import StrEnum
 from typing import Literal
@@ -71,6 +72,7 @@ class Config(BaseModel):
 
 def load_config(path: pathlib.Path = pathlib.Path("config.yaml")) -> Config:
     """Read a YAML file and return the parsed dictionary."""
+    logging.info(f"Loading config file: {path}")
     with path.open("r", encoding="utf-8") as f:
         raw = yaml.safe_load(f)
         return Config.model_validate(raw)

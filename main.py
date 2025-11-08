@@ -1,7 +1,9 @@
+import argparse
 import asyncio as aio
 import json
 import logging
 import sys
+from pathlib import Path
 
 from src.config import load_config
 from src.embeddings import download_encoders
@@ -9,15 +11,17 @@ from src.mirroring import MirroringPipeline
 from src.models import download_models
 from src.pipeline import Scenario
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout)],
-)
-
 
 async def _main() -> None:
-    cfg = load_config()
+    args = parse_args(sys.argv[1:])
+
+    logging.basicConfig(
+        level=logging.DEBUG if args.debug else logging.INFO,
+        format="%(asctime)s %(levelname)s %(message)s",
+        handlers=[logging.StreamHandler(sys.stdout)],
+    )
+
+    cfg = load_config(args.config)
 
     await aio.gather(download_models(cfg), download_encoders(cfg))
 
@@ -37,6 +41,33 @@ async def _main() -> None:
                 logging.error(f"Unimplemented pipeline type {name}")
 
         logging.info("Experiment completed")
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="nll2fr-pipeline",
+        description="Testing normative specification languages.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+
+    parser.add_argument(
+        "-c",
+        "--config",
+        type=Path,
+        required=False,
+        default=Path("config.yaml"),
+        metavar="FILE",
+        help="Path to the configuration file in YAML format.",
+    )
+
+    parser.add_argument(
+        "-d",
+        "--debug",
+        action="store_true",
+        help="Enable debug logging output.",
+    )
+
+    return parser.parse_args(argv)
 
 
 def main() -> None:

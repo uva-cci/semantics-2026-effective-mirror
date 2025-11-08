@@ -6,9 +6,13 @@ ENV UV_LINK_MODE=copy
 ENV UV_CACHE_DIR=.cache/uv
 
 # Install system dependencies
-RUN apt-get update && \
-    apt-get install -y git openssh-client && \
-    rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    gcc \
+    libssl-dev \
+    libffi-dev \
+    zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install uv Python package manager
 COPY --from=ghcr.io/astral-sh/uv:0.8.15 /uv /uvx /bin/
@@ -30,6 +34,6 @@ COPY . /app
 RUN --mount=type=cache,target=$UV_CACHE_DIR \
     uv sync --frozen
 
-VOLUME /data/models
+VOLUME /app/data
 
-CMD ["uv", "run", "main.py"]
+ENTRYPOINT ["uv", "run", "main.py"]
