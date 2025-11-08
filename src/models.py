@@ -109,7 +109,7 @@ class LocalInferenceModel(InferenceModel):
         )
 
 
-openai_client: OpenAI
+openai_client: OpenAI | None = None
 
 
 class OpenAIInferenceModel(InferenceModel):
@@ -129,18 +129,18 @@ class OpenAIInferenceModel(InferenceModel):
     def generate(
         self,
         prompt: str,
-        params: InferenceParams
+        params: InferenceParams  # not supported
     ) -> InferenceOutput:
-        result = openai_client.completions.create(
+        assert openai_client
+
+        result = openai_client.chat.completions.create(
             model=self.cfg.model_id,
-            prompt=prompt,
-            temperature=params.temperature,
-            top_p=params.top_p,
+            messages=[{"role": "user", "content": prompt}],
         )
 
         return InferenceOutput(
-            params=params,
-            text=result.choices[0].text,
+            params=InferenceParams(temperature=1.0, top_p=1.0, top_k=0),
+            text=result.choices[0].message.content or "",
             stats=InferenceStats(
                 completion_tokens=result.usage.completion_tokens,
                 prompt_tokens=result.usage.prompt_tokens,
