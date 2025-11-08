@@ -1,18 +1,16 @@
 ## Role & Goal
 You are a domain-specific language (DSL) interpreter.
-Your task is to read the DSL specification provided below and produce a clear, concise natural‑language description that explains the intent and structure of that specification.
+Your task is to read the DSL specification provided below and produce a clear, concise natural language description that explains the intent and structure of that specification.
 Keep in mind you are NOT supposed to reference the DSL or the structure of the specification. 
 Your objective is to express the scenario described by the DSL without any references to the original policy.
 
 {% if ablation.syntax %}
+## Context
+- **DSL Name**: `{{ dsl.name }}`
+- **DSL Syntax Type**: `{{ validation.kind }}`
+- **Syntax Definition**: 
 
-    ## Context
-    - **DSL Name**: `{{ dsl.name }}`
-    - **DSL Syntax Type**: `{{ validation.kind }}`
-    - **Syntax Definition**: 
-
-    {{ validation.definition }}
-
+{{ validation.definition }}
 {% endif %}
 
 ## DSL Input (the specification to be described)
@@ -31,11 +29,12 @@ Your objective is to express the scenario described by the DSL without any refer
 {% if ablation.few_shot %}
 
 {% for example in examples %}
-    ## Example (for reference only)
-    **Example Scenario**: `{{ example.scenario_dsl_input }}`
-    **Expected Output**:
+## Example (for reference only)
+**Example Scenario**: `{{ example.input }}`
+**Expected Output**:
 
-    {{ example.scenario_natural_output }}
+{{ example.output }}
+
 {% endfor %}
 
 {% endif %}

@@ -3,14 +3,12 @@ You are a domain-specific language (DSL) specialist.
 Your task is to transform the following normative scenario into a precise specification written in the DSL defined below.
 
 {% if ablation.syntax %}
+## Context
+- **DSL Name**: `{{ dsl.name }}`
+- **DSL Syntax Type**: `{{ validation.kind }}`
+- **Syntax Definition**: 
 
-    ## Context
-    - **DSL Name**: `{{ dsl.name }}`
-    - **DSL Syntax Type**: `{{ validation.kind }}`
-    - **Syntax Definition**: 
-
-    {{ validation.definition }}
-
+{{ validation.definition }}
 {% endif %}
 
 ## Input Scenario
@@ -20,17 +18,18 @@ Your task is to transform the following normative scenario into a precise specif
 ## Output Requirements
 1. **Format** - Produce the specification **exactly** in the syntax defined above.
 2. **No extra text** - Do **not** add comments, explanations, or surrounding code fences.
-3. **Validity** - Ensure the output conforms to the syntax rules (e.g., valid JSON if JSON-Schema, valid BNF if BNF).
+3. **Validity** - Ensure the output conforms to the syntax rules (e.g., valid JSON if JSON-Schema, valid code if BNF).
 4. **Precision** - If the scenario contains ambiguous or missing details, output the specification with placeholders (e.g., `__UNKNOWN__`) but *do not* invent values.
 
 {% if ablation.few_shot %}
 
 {% for example in examples %}
-    ## Example (for reference only)
-    **Example Scenario**: `{{ example.scenario }}`
-    **Expected Output**:
+## Example (for reference only)
+**Example Scenario**: `{{ example.input }}`
+**Expected Output**:
 
-    {{ example.output }}
+{{ example.output }}
+
 {% endfor %}
 
 {% endif %}
