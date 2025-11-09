@@ -3,6 +3,7 @@ from pathlib import Path
 
 import torch
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
+from sentence_transformers import SentenceTransformer
 
 from src.config import Config, DSLConfig, DSLValidationConfig, PipelineName
 from src.embeddings import get_encoder, score_vectors
@@ -46,6 +47,10 @@ class MirroringPipeline(Pipeline[MirroringPipelineOutput]):
                 with open(validation.path, "r") as f:
                     self.dsl_definitions.setdefault(
                         dsl.name, {})[validation.kind] = f.read()
+
+        self.encoders: dict[str, SentenceTransformer] = {}
+        for encoding in self.cfg.encodings:
+            self.encoders[encoding.name] = get_encoder(encoding)
 
     def produce_datapoint(
         self,
@@ -108,18 +113,18 @@ class MirroringPipeline(Pipeline[MirroringPipelineOutput]):
         logging.debug(f"output: {symbolic_output2}")
 
         semantic_scores: dict[str, float] = {}
-        for encoding in self.cfg.encodings:
-            encoder = get_encoder(encoding)
+        for encoding, encoder in self.encoders.items():
             a: torch.Tensor = encoder.encode(
                 scenario.description, convert_to_tensor=True, show_progress_bar=False)
             b: torch.Tensor = encoder.encode(
                 natural_language.text, convert_to_tensor=True, show_progress_bar=False)
-            semantic_scores[encoding.name] = score_vectors(a, b)
+            semantic_scores[encoding] = score_vectors(a, b)
 
         return MirroringPipelineOutput(
             pipeline=PipelineName.MIRRORING,
             scenario_id=scenario.id,
             model=model.name,
+            dsl=dsl.name,
             ablation=ablation,
             symbolic_output1=symbolic_output1,
             symbolic_output2=symbolic_output2,
