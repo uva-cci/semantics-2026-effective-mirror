@@ -63,6 +63,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "-d",
         "--debug",
+        required=False,
+        default=False,
         action="store_true",
         help="Enable debug logging output.",
     )

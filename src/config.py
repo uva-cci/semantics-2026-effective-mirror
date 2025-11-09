@@ -25,12 +25,15 @@ class DSLValidationConfig(BaseModel):
 
 class DSLConfig(BaseModel):
     name: str
+    examples: FilePath
     validation: list[DSLValidationConfig]
 
 
 class LocalModelConfig(BaseModel):
     kind: Literal['local']
     context_length: int
+    n_batch: int
+    n_ubatch: int
     url: HttpUrl
 
 

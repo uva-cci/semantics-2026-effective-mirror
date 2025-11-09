@@ -7,7 +7,13 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined
 from src.config import Config, DSLConfig, DSLValidationConfig, PipelineName
 from src.embeddings import get_encoder, score_vectors
 from src.models import InferenceModel, InferenceOutput, InferenceParams
-from src.pipeline import AblationFlags, Pipeline, PipelineOutput, Scenario
+from src.pipeline import (
+    AblationFlags,
+    FewShotExample,
+    Pipeline,
+    PipelineOutput,
+    Scenario,
+)
 
 PROMPTS_PATH = Path(__file__).resolve().parent / "prompts"
 
@@ -57,7 +63,7 @@ class MirroringPipeline(Pipeline[MirroringPipelineOutput]):
             "ablation": ablation.model_dump(),
             "dsl": dsl,
             "validation": {"definition": dsl_definition, **validation.model_dump()},
-            "examples": []
+            "examples": self.examples[dsl.name]
         })
 
         logging.debug(encode_prompt)
@@ -71,7 +77,14 @@ class MirroringPipeline(Pipeline[MirroringPipelineOutput]):
             "ablation": ablation.model_dump(),
             "dsl": dsl,
             "validation": {"definition": dsl_definition, **validation.model_dump()},
-            "examples": []
+            "examples": [
+                # reverse input/output for decoding
+                FewShotExample(
+                    validation_kind=validation.kind,
+                    input=ex.output,
+                    output=ex.input)
+                for ex in self.examples[dsl.name]
+            ]
         })
 
         logging.debug(decode_prompt)
@@ -85,7 +98,7 @@ class MirroringPipeline(Pipeline[MirroringPipelineOutput]):
             "ablation": ablation.model_dump(),
             "dsl": dsl,
             "validation": {"definition": dsl_definition, **validation.model_dump()},
-            "examples": []
+            "examples": self.examples[dsl.name]
         })
 
         logging.debug(encode_prompt)
@@ -107,6 +120,7 @@ class MirroringPipeline(Pipeline[MirroringPipelineOutput]):
             pipeline=PipelineName.MIRRORING,
             scenario_id=scenario.id,
             model=model.name,
+            ablation=ablation,
             symbolic_output1=symbolic_output1,
             symbolic_output2=symbolic_output2,
             natural_language=natural_language,

@@ -1,4 +1,5 @@
 import asyncio as aio
+import ctypes
 import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -6,7 +7,7 @@ from typing import Any, Awaitable, cast, override
 
 import aiofiles
 import aiohttp
-from llama_cpp import CreateCompletionResponse, Llama
+from llama_cpp import CreateCompletionResponse, Llama, llama_log_set
 from openai import OpenAI
 from pydantic import BaseModel
 from tqdm import tqdm
@@ -64,6 +65,15 @@ class InferenceModel(ABC):
         ...
 
 
+def my_log_callback(level: int, message: str, user_data: Any):
+    pass
+
+
+log_callback = ctypes.CFUNCTYPE(
+    None, ctypes.c_int, ctypes.c_char_p, ctypes.c_void_p)(my_log_callback)
+llama_log_set(log_callback, ctypes.c_void_p())
+
+
 class LocalInferenceModel(InferenceModel):
     """
     Local inference using a compiled llama.cpp model.
@@ -76,7 +86,9 @@ class LocalInferenceModel(InferenceModel):
         self.model = Llama(
             model_path=str(self.path),
             n_ctx=cfg.context_length,
-            verbose=False
+            n_batch=cfg.n_batch,
+            n_ubatch=cfg.n_ubatch,
+            verbose=False,
         )
 
     @override
@@ -90,6 +102,7 @@ class LocalInferenceModel(InferenceModel):
             temperature=params.temperature,
             top_p=params.top_p,
             top_k=params.top_k,
+            max_tokens=None
         ))
 
         stats = result.get("usage", {
@@ -100,7 +113,7 @@ class LocalInferenceModel(InferenceModel):
 
         return InferenceOutput(
             params=params,
-            text=result["choices"][0]["text"],
+            text=extract_final_answer(self.name, result["choices"][0]["text"]),
             stats=InferenceStats(
                 completion_tokens=stats["completion_tokens"],
                 prompt_tokens=stats["prompt_tokens"],
@@ -234,3 +247,17 @@ async def download_models(cfg: Config) -> None:
     await aio.gather(*tasks)
 
     logging.info("All models downloads finished.")
+
+
+def extract_final_answer(model: str, text: str) -> str:
+    if model.startswith("gpt-oss"):
+        return extract_gpt_oss(text)
+    return text
+
+
+def extract_gpt_oss(text: str) -> str:
+    marker = "<|start|>assistant<|channel|>final<|message|>"
+    index = text.find(marker)
+    if index == -1:
+        return ""
+    return text[index + len(marker):]

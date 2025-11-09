@@ -5,6 +5,12 @@ pipelines:
 scenarios: data/scenarios.json
 
 dsl:
+  - name: dcpl
+    examples: data/dsl/dcpl/examples.json
+    validation:
+      - kind: json-schema
+        path: data/dsl/dcpl/schema.json
+
   - name: eflint
     validation:
       - kind: json-schema
@@ -17,40 +23,43 @@ dsl:
       - kind: json-ld
         path: data/dsl/odrl/odrl-2.2.ld.json
 
-  - name: dcpl
-    validation:
-      - kind: json-schema
-        path: data/dsl/dcpl/schema.json
-
   - name: symboleo
     validation:
       - kind: bnf
         path: data/dsl/symboleo/grammar.bnf
 
 models:
+  - name: gpt-oss-20b
+    meta:
+      kind: local
+      context_length: 131_072
+      n_batch: 2048
+      n_ubatch: 2048
+      url: https://huggingface.co/ggml-org/gpt-oss-20b-GGUF/resolve/main/gpt-oss-20b-mxfp4.gguf
+
   - name: llama3.2-1b
     meta:
       kind: local
       context_length: 131_072
+      n_batch: 2048
+      n_ubatch: 2048
       url: https://huggingface.co/QuantFactory/Llama-3.2-1B-GGUF/resolve/main/Llama-3.2-1B.Q8_0.gguf
 
   - name: qwen2.1-5b
     meta:
       kind: local
       context_length: 32_768
+      n_batch: 2048
+      n_ubatch: 2048
       url: https://huggingface.co/Qwen/Qwen2-1.5B-Instruct-GGUF/resolve/main/qwen2-1_5b-instruct-q8_0.gguf
 
   - name: gemma3.1-1b
     meta:
       kind: local
       context_length: 32_768
+      n_batch: 2048
+      n_ubatch: 2048
       url: https://huggingface.co/unsloth/gemma-3-1b-it-GGUF/resolve/main/gemma-3-1b-it-UD-Q8_K_XL.gguf
-
-  - name: gpt-oss-20b
-    meta:
-      kind: local
-      context_length: 32_768
-      url: https://huggingface.co/ggml-org/gpt-oss-20b-GGUF/resolve/main/gpt-oss-20b-mxfp4.gguf
 
 encodings:
   - name: all-MiniLM-L6-v2
@@ -58,18 +67,6 @@ encodings:
 
   - name: nomic-embed-text-v1
     org: nomic-ai
-
-  - name: nomic-embed-text-v1.5
-    org: nomic-ai
-
-  - name: jina-embeddings-v2-base-en
-    org: jinaai
-
-  - name: jina-embeddings-v3
-    org: jinaai
-
-  - name: e5-base-v2
-    org: intfloat
 
 inference:
   temperature: [0.0, 0.2, 0.5, 0.8, 1.0]

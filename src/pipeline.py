@@ -1,4 +1,5 @@
 import itertools
+import json
 import logging
 import os
 import threading
@@ -11,7 +12,13 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from .config import Config, DSLConfig, DSLValidationConfig, PipelineName
+from .config import (
+    Config,
+    DSLConfig,
+    DSLValidationConfig,
+    PipelineName,
+    ValidationFormat,
+)
 from .models import InferenceModel, InferenceParams, get_model
 
 
@@ -21,18 +28,25 @@ class Scenario(BaseModel):
     description: str
 
 
-class PipelineOutput(BaseModel):
-    id: uuid.UUID = Field(default_factory=uuid.uuid4)
-    scenario_id: str
-    pipeline: PipelineName
-    model: str
-    created_at: datetime = Field(
-        default_factory=lambda: datetime.now(tz=timezone.utc))
+class FewShotExample(BaseModel):
+    validation_kind: ValidationFormat
+    input: str
+    output: str
 
 
 class AblationFlags(BaseModel):
     syntax: bool
     few_shot: bool
+
+
+class PipelineOutput(BaseModel):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4)
+    scenario_id: str
+    pipeline: PipelineName
+    ablation: AblationFlags
+    model: str
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(tz=timezone.utc))
 
 
 class Pipeline[T: PipelineOutput](ABC):
@@ -41,6 +55,15 @@ class Pipeline[T: PipelineOutput](ABC):
         self.cfg = cfg
         self.scenarios = scenarios
         self.output: Queue[T | None] = Queue()
+
+        # DSL name -> examples
+        self.examples: dict[str, list[FewShotExample]] = {}
+        for dsl in cfg.dsl:
+            self.examples[dsl.name] = []
+            with open(dsl.examples, "r") as f:
+                raw = json.load(f)
+                for ex in raw:
+                    self.examples[dsl.name].append(FewShotExample(**ex))
 
     def run(self) -> None:
         logging.info(f"Pipeline {self.__class__.__name__} started")
@@ -53,21 +76,21 @@ class Pipeline[T: PipelineOutput](ABC):
         t.start()
 
         # create permutations of inference parameters based on the config
-        inference_profiles = itertools.product(
+        inference_profiles = list(itertools.product(
             self.cfg.inference.temperature,
             self.cfg.inference.top_p,
             self.cfg.inference.top_k,
-        )
+        ))
 
-        for scenario in self.scenarios:
-            logging.info(f"Running scenario: {scenario.id}")
-            for dsl in self.cfg.dsl:
-                logging.info(f"- DSL: {dsl.name}")
-                for validation in dsl.validation:
-                    logging.info(f"- Validation: {validation.kind}")
-                    for model_cfg in self.cfg.models:
-                        logging.info(f"- Model: {model_cfg.name}")
-                        model = get_model(model_cfg)
+        for model_cfg in self.cfg.models:
+            logging.info(f"- Model: {model_cfg.name}")
+            model = get_model(model_cfg)
+            for scenario in self.scenarios:
+                logging.info(f"Running scenario: {scenario.id}")
+                for dsl in self.cfg.dsl:
+                    logging.info(f"- DSL: {dsl.name}")
+                    for validation in dsl.validation:
+                        logging.info(f"- Validation: {validation.kind}")
                         for abl in [
                             AblationFlags(syntax=True, few_shot=False),
                             AblationFlags(syntax=False, few_shot=True),
