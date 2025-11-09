@@ -39,12 +39,17 @@ class AblationFlags(BaseModel):
     few_shot: bool
 
 
+class DSLSetup(BaseModel):
+    name: str
+    validation: ValidationFormat
+
+
 class PipelineOutput(BaseModel):
     id: uuid.UUID = Field(default_factory=uuid.uuid4)
     scenario_id: str
     pipeline: PipelineName
     ablation: AblationFlags
-    dsl: str
+    dsl: DSLSetup
     model: str
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(tz=timezone.utc))

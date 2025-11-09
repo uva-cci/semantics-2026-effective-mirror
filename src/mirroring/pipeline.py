@@ -10,6 +10,7 @@ from src.embeddings import get_encoder, score_vectors
 from src.models import InferenceModel, InferenceOutput, InferenceParams
 from src.pipeline import (
     AblationFlags,
+    DSLSetup,
     FewShotExample,
     Pipeline,
     PipelineOutput,
@@ -124,7 +125,7 @@ class MirroringPipeline(Pipeline[MirroringPipelineOutput]):
             pipeline=PipelineName.MIRRORING,
             scenario_id=scenario.id,
             model=model.name,
-            dsl=dsl.name,
+            dsl=DSLSetup(name=dsl.name, validation=validation.kind),
             ablation=ablation,
             symbolic_output1=symbolic_output1,
             symbolic_output2=symbolic_output2,
