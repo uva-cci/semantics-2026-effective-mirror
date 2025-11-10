@@ -13,5 +13,30 @@
     "validation_kind": "json-schema",
     "input": "Student or staff can register as member of the library by using their id card",
     "output": "{\"position\":\"power\",\"holder\":\"student | staff\",\"action\":{\"reference\":\"#register\",\"refinement\":{\"instrument\":\"holder.id_card\"}},\"consequence\":{\"entity\":\"holder\",\"in\":\"member\"}}"
+  },
+  {
+    "validation_kind": "bnf",
+    "input": "As long as it is raining, it is wet",
+    "output": "raining -> wet."
+  },
+  {
+    "validation_kind": "bnf",
+    "input": "If it rains, it becomes wet.",
+    "output": "#rain => +wet."
+  },
+  {
+    "validation_kind": "bnf",
+    "input": "During an auction, if a hand is raised, a bet comes to exist.",
+    "output": "auction -> { #raise_hand => +bet. }."
+  },
+  {
+    "validation_kind": "bnf",
+    "input": "A priest has the power to make John and Paul married by marrying them.",
+    "output": "power {\n    holder: priest\n    action: #marry { patient: [john, paul] }\n    consequence: +married(john, paul)\n   }."
+  },
+  {
+    "validation_kind": "bnf",
+    "input": "John has towards the university a duty to teach students. John violates this duty if he is not online.",
+    "output": "duty {\n    holder: john\n    counterparty: university\n    action: #teach { recipient: student }\n    violation: ~john.online\n   }."
   }
 ]
