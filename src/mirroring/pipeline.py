@@ -176,10 +176,10 @@ class MirroringPipeline(Pipeline[MirroringPipelineOutput]):
         return output
 
     def validate_json(self, s: str, dsl: str) -> tuple[bool, str]:
+        schema = json.loads(
+            self.dsl_definitions[dsl][ValidationFormat.JSON_SCHEMA])
         try:
             raw = json.loads(s)
-            schema = json.loads(
-                self.dsl_definitions[dsl][ValidationFormat.JSON_SCHEMA])
             jsonschema.validate(instance=raw, schema=schema)
             return (True, "")
         except (json.JSONDecodeError, jsonschema.ValidationError) as e:
