@@ -98,6 +98,7 @@ class Pipeline[T: PipelineOutput](ABC):
                     for validation in dsl.validation:
                         logging.info(f"- Validation: {validation.kind}")
                         for abl in [
+                            AblationFlags(syntax=False, few_shot=False),
                             AblationFlags(syntax=True, few_shot=False),
                             AblationFlags(syntax=False, few_shot=True),
                             AblationFlags(syntax=True, few_shot=True),

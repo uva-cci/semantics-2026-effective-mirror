@@ -1,6 +1,9 @@
+import json
 import logging
 from pathlib import Path
 
+import jsonschema
+import lark
 import torch
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 from sentence_transformers import SentenceTransformer
@@ -15,6 +18,7 @@ from src.pipeline import (
     Pipeline,
     PipelineOutput,
     Scenario,
+    ValidationFormat,
 )
 
 PROMPTS_PATH = Path(__file__).resolve().parent / "prompts"
@@ -42,7 +46,7 @@ class MirroringPipeline(Pipeline[MirroringPipelineOutput]):
         self.tmpl_encode = self.tmpl_env.get_template("encode.jinja")
         self.tmpl_decode = self.tmpl_env.get_template("decode.jinja")
 
-        self.dsl_definitions: dict[str, dict[str, str]] = {}
+        self.dsl_definitions: dict[str, dict[ValidationFormat, str]] = {}
         for dsl in cfg.dsl:
             for validation in dsl.validation:
                 with open(validation.path, "r") as f:
@@ -62,27 +66,18 @@ class MirroringPipeline(Pipeline[MirroringPipelineOutput]):
         ablation: AblationFlags,
         params: InferenceParams,
     ) -> MirroringPipelineOutput:
-        dsl_definition = self.dsl_definitions[dsl.name][validation.kind]
 
-        encode_prompt = self.tmpl_encode.render({
-            "scenario": scenario.description,
-            "ablation": ablation.model_dump(),
-            "dsl": dsl,
-            "validation": {"definition": dsl_definition, **validation.model_dump()},
-            "examples": self.examples[dsl.name]
-        })
-
-        logging.debug(encode_prompt)
-
-        symbolic_output1 = model.generate(encode_prompt, params)
-
-        logging.debug(f"output: {symbolic_output1}")
+        symbolic_output1 = self.generate_symbolic(
+            scenario.description, dsl, validation, model, ablation, params)
 
         decode_prompt = self.tmpl_decode.render({
             "dsl_input": symbolic_output1.text,
             "ablation": ablation.model_dump(),
             "dsl": dsl,
-            "validation": {"definition": dsl_definition, **validation.model_dump()},
+            "validation": {
+                "definition": self.dsl_definitions[dsl.name][validation.kind],
+                **validation.model_dump()
+            },
             "examples": [
                 # reverse input/output for decoding
                 FewShotExample(
@@ -94,24 +89,11 @@ class MirroringPipeline(Pipeline[MirroringPipelineOutput]):
         })
 
         logging.debug(decode_prompt)
-
         natural_language = model.generate(decode_prompt, params)
-
         logging.debug(f"output: {natural_language}")
 
-        encode_prompt = self.tmpl_encode.render({
-            "scenario": natural_language.text,
-            "ablation": ablation.model_dump(),
-            "dsl": dsl,
-            "validation": {"definition": dsl_definition, **validation.model_dump()},
-            "examples": self.examples[dsl.name]
-        })
-
-        logging.debug(encode_prompt)
-
-        symbolic_output2 = model.generate(encode_prompt, params)
-
-        logging.debug(f"output: {symbolic_output2}")
+        symbolic_output2 = self.generate_symbolic(
+            natural_language.text, dsl, validation, model, ablation, params)
 
         semantic_scores: dict[str, float] = {}
         for encoding, encoder in self.encoders.items():
@@ -133,3 +115,81 @@ class MirroringPipeline(Pipeline[MirroringPipelineOutput]):
             semantic_scores=semantic_scores,
             symbolic_equivalence=False  # TODO: run symbolic static analysis
         )
+
+    def generate_symbolic(
+        self,
+        scenario: str,
+        dsl: DSLConfig,
+        validation: DSLValidationConfig,
+        model: InferenceModel,
+        ablation: AblationFlags,
+        params: InferenceParams,
+    ) -> InferenceOutput:
+        assert self.cfg.max_syntax_retries > 0
+
+        dsl_definition = self.dsl_definitions[dsl.name][validation.kind]
+
+        encode_prompt = self.tmpl_encode.render({
+            "scenario": scenario,
+            "ablation": ablation.model_dump(),
+            "dsl": dsl,
+            "validation": {"definition": dsl_definition, **validation.model_dump()},
+            "examples": self.examples[dsl.name],
+            "attempt": None
+        })
+
+        logging.debug(encode_prompt)
+
+        ok = False
+        err = ""
+        output = model.generate(encode_prompt, params)
+        for i in range(self.cfg.max_syntax_retries):
+            match validation.kind:
+                case ValidationFormat.JSON_SCHEMA:
+                    ok, err = self.validate_json(output.text, dsl.name)
+                case ValidationFormat.BNF:
+                    ok, err = self.validate_bnf(output.text, dsl.name)
+
+            if ok:
+                break
+
+            encode_prompt = self.tmpl_encode.render({
+                "scenario": scenario,
+                "ablation": ablation.model_dump(),
+                "dsl": dsl,
+                "validation": {"definition": dsl_definition, **validation.model_dump()},
+                "examples": self.examples[dsl.name],
+                "attempt": {
+                    "previous": output.text,
+                    "error": err
+                }
+            })
+
+            logging.debug(encode_prompt)
+
+            output = model.generate(encode_prompt, params)
+            output.attempts = i + 1
+
+            logging.debug(f"output: {output}")
+
+        output.success = ok
+        return output
+
+    def validate_json(self, s: str, dsl: str) -> tuple[bool, str]:
+        try:
+            raw = json.loads(s)
+            schema = json.loads(
+                self.dsl_definitions[dsl][ValidationFormat.JSON_SCHEMA])
+            jsonschema.validate(instance=raw, schema=schema)
+            return (True, "")
+        except (json.JSONDecodeError, jsonschema.ValidationError) as e:
+            logging.debug(e)
+            return (False, str(e))
+
+    def validate_bnf(self, s: str, dsl: str) -> tuple[bool, str]:
+        parser = lark.Lark(self.dsl_definitions[dsl][ValidationFormat.BNF])
+        try:
+            parser.parse(s)  # type: ignore
+            return (True, "")
+        except lark.UnexpectedInput as e:
+            return (False, str(e))

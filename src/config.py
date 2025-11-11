@@ -14,7 +14,6 @@ class PipelineName(StrEnum):
 
 class ValidationFormat(StrEnum):
     JSON_SCHEMA = "json-schema"
-    JSON_LD = "json-ld"
     BNF = "bnf"
 
 
@@ -29,16 +28,28 @@ class DSLConfig(BaseModel):
     validation: list[DSLValidationConfig]
 
 
-class LocalModelConfig(BaseModel):
-    kind: Literal['local']
+class OllamaLocalModelParams(BaseModel):
+    driver: Literal['ollama']
+    model_id: str
+
+
+class LlamaCppLocalModelParams(BaseModel):
+    driver: Literal['llama_cpp']
     context_length: int
     n_batch: int
     n_ubatch: int
     url: HttpUrl
 
 
+class LocalModelConfig(BaseModel):
+    kind: Literal['local']
+    params: OllamaLocalModelParams | LlamaCppLocalModelParams = Field(
+        discriminator="driver")
+
+
 class CloudProvider(StrEnum):
     OPENAI = "openai"
+    ANTHROPIC = "anthropic"
 
 
 class CloudModelConfig(BaseModel):
@@ -71,6 +82,7 @@ class Config(BaseModel):
     models: list[ModelConfig]
     encodings: list[EmbeddingModelConfig]
     inference: InferenceParamsConfig
+    max_syntax_retries: int
 
 
 def load_config(path: pathlib.Path = pathlib.Path("config.yaml")) -> Config:

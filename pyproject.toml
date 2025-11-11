@@ -3,13 +3,19 @@ name = "nll2fr-2025-neurosymbolic"
 version = "0.1.0"
 description = "A reproduction package for the relative workshop paper."
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 dependencies = [
     "aiofiles>=25.1.0",
     "aiohttp>=3.13.2",
+    "anthropic>=0.72.0",
+    "backoff>=2.2.1",
     "einops>=0.8.1",
+    "google-genai>=1.49.0",
     "jinja2>=3.1.6",
+    "jsonschema>=4.25.1",
+    "lark>=1.3.1",
     "llama-cpp-python>=0.3.16",
+    "ollama>=0.6.0",
     "openai>=2.7.1",
     "pydantic>=2.12.4",
     "pyyaml>=6.0.3",
@@ -20,6 +26,20 @@ dependencies = [
 [dependency-groups]
 dev = [
     "types-aiofiles>=25.1.0.20251011",
+    "types-jsonschema>=4.25.1.20251009",
     "types-pyyaml>=6.0.12.20250915",
     "types-tqdm>=4.67.0.20250809",
 ]
+
+
+[tool.uv]
+required-environments = [
+    "sys_platform == 'darwin' and platform_machine == 'arm64'",
+]
+
+[tool.uv.sources]
+llama-cpp-python = { index = "abetlen" }
+
+[[tool.uv.index]]
+name = "abetlen"
+url = "https://abetlen.github.io/llama-cpp-python/whl/metal"
