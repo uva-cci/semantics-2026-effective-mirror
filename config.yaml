@@ -4,62 +4,87 @@ pipelines:
 
 scenarios: data/scenarios.json
 
+max_syntax_retries: 3
+
 dsl:
   - name: dcpl
     examples: data/dsl/dcpl/examples.json
     validation:
       - kind: json-schema
         path: data/dsl/dcpl/schema.json
+      - kind: bnf
+        path: data/dsl/dcpl/grammar.bnf
 
-  - name: eflint
+  - name: odrl
+    examples: data/dsl/odrl/examples.json
     validation:
       - kind: json-schema
-        path: data/dsl/eflint/eflint-3.0.0.schema.json
+        path: data/dsl/odrl/schema.json
+
+  - name: eflint
+    examples: data/dsl/eflint/examples.json
+    validation:
       - kind: bnf
         path: data/dsl/eflint/grammar.bnf
 
-  - name: odrl
-    validation:
-      - kind: json-ld
-        path: data/dsl/odrl/odrl-2.2.ld.json
-
-  - name: symboleo
-    validation:
-      - kind: bnf
-        path: data/dsl/symboleo/grammar.bnf
-
 models:
-  - name: gpt-oss-20b
+  - name: llama3.2
     meta:
       kind: local
-      context_length: 131_072
-      n_batch: 2048
-      n_ubatch: 2048
-      url: https://huggingface.co/ggml-org/gpt-oss-20b-GGUF/resolve/main/gpt-oss-20b-mxfp4.gguf
+      params:
+        driver: ollama
+        model_id: llama3.2
 
-  - name: llama3.2-1b
+  - name: gpt-oss
     meta:
       kind: local
-      context_length: 131_072
-      n_batch: 2048
-      n_ubatch: 2048
-      url: https://huggingface.co/QuantFactory/Llama-3.2-1B-GGUF/resolve/main/Llama-3.2-1B.Q8_0.gguf
+      params:
+        driver: ollama
+        model_id: gpt-oss:20b
 
-  - name: qwen2.1-5b
+  - name: qwen3
     meta:
       kind: local
-      context_length: 32_768
-      n_batch: 2048
-      n_ubatch: 2048
-      url: https://huggingface.co/Qwen/Qwen2-1.5B-Instruct-GGUF/resolve/main/qwen2-1_5b-instruct-q8_0.gguf
+      params:
+        driver: ollama
+        model_id: qwen3:8b
 
-  - name: gemma3.1-1b
+  - name: gemma3.1
     meta:
       kind: local
-      context_length: 32_768
-      n_batch: 2048
-      n_ubatch: 2048
-      url: https://huggingface.co/unsloth/gemma-3-1b-it-GGUF/resolve/main/gemma-3-1b-it-UD-Q8_K_XL.gguf
+      params:
+        driver: ollama
+        model_id: gemma3:4b
+
+  - name: gpt-5
+    meta:
+      kind: cloud
+      provider: openai
+      model_id: gpt-5-2025-08-07
+
+  - name: gpt-4.1
+    meta:
+      kind: cloud
+      provider: openai
+      model_id: gpt-4.1-2025-04-14
+
+  - name: claude-sonnet-4.5
+    meta:
+      kind: cloud
+      provider: anthropic
+      model_id: claude-sonnet-4-5-20250929
+
+  - name: claude-haiku-4.5
+    meta:
+      kind: cloud
+      provider: anthropic
+      model_id: claude-haiku-4-5-20251001
+
+  - name: claude-opus-4.1
+    meta:
+      kind: cloud
+      provider: anthropic
+      model_id: claude-opus-4-1-20250805
 
 encodings:
   - name: all-MiniLM-L6-v2
@@ -69,6 +94,6 @@ encodings:
     org: nomic-ai
 
 inference:
-  temperature: [0.0, 0.2, 0.5, 0.8, 1.0]
-  top_p: [0.8, 0.9, 0.95, 0.99]
-  top_k: [40, 80, 200, 0]
+  temperature: [0.7]
+  top_p: [0.9]
+  top_k: [50]
