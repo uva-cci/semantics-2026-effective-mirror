@@ -1,0 +1,110 @@
+// a program consists of an arbitrarily long list of rules, cases, facts, abstract compounds (i.e. compounds that can be parametrized)
+start: (reactive_rule | transformational_rule | constraining_rule | case | fact | abstract_compound )*
+
+
+// main components of a program
+reactive_rule: event (":" top_ext_condition_or)? "=>" top_action_seq "."
+transformational_rule: top_ext_condition_or "->" neg_condition "."
+constraining_rule: top_ext_condition_or "-o" neg_condition "."
+case: "=>" top_action_seq "."
+fact: neg_condition "."
+
+
+// event expressions. order of evaluation: "par", then “alt", then "seq"
+top_action_seq: top_action_alt (("seq" | ";") top_action_alt)*
+top_action_alt: top_action_par ("alt" top_action_par)*
+top_action_par: event (("par" | ",") event)*
+
+
+// events are expressed as primitive events, or transitions on conditions
+event: (agent ".")? "#" action (refinement)? | ("+" | "-") neg_condition
+action: descriptor
+
+
+// extended condition expressions. order of evaluation: "and", then "or"
+top_ext_condition_or: top_ext_condition_and (("or" | ";") top_ext_condition_and)*
+top_ext_condition_and: ext_condition (("and" | ",") ext_condition)*
+
+
+// extended conditions are conditions possibly default negated
+ext_condition: ("not")? neg_condition         
+
+
+// conditions are possibly strongly negated
+neg_condition: ("~")? condition
+
+
+// positive conditions are expressed by descriptors, possibly refined, compounds, frames, and may be re-aliased with a new name
+condition: ( descriptor (refinement)? | compound | dcpl_frame ) ( "as" functor )?
+refinement: "{" ( binding )+ "}"
+binding: functor ":" value
+
+
+// values for bindings in refinements are conditions, events, integers, floats, and lists of values
+value: top_ext_condition_or | event | INT | NUMBER | list
+list: "[" value ("," value)+ "]"
+
+
+// a descriptor consists of a functor possibly defined within a domain, and possibly parametrized
+descriptor: (domain)? functor ("(" ( list_values | list_bindings ) ")")?
+domain: descriptor "."
+functor: /[a-z][0-9a-z_]*/
+list_values: value ("," value)+
+list_bindings: binding ("," binding)+
+
+
+// compounds are like subprograms
+compound : "{" start "}"
+
+
+// abstract compounds are parametrized subprograms
+abstract_compound : "DEF" functor ("(" ( list_functors | list_abstract_bindings ) ")") "{" start "}" "."
+list_functors: functor ("," functor)+
+list_abstract_bindings: abstract_binding ("," abstract_binding)+
+abstract_binding: functor ":" functor
+
+
+// DCPL frames are either postestative or deontic frames
+dcpl_frame: potestative_frame | deontic_frame
+
+
+potestative_frame: potestative_category "{" ( holder_binding | counterparty_binding | action_binding | consequence_binding | binding )+ "}"
+potestative_category: "power" | "disability" | "liability" | "immunity"
+
+
+deontic_frame: deontic_category "{" ( holder_binding | counterparty_binding | action_binding | target_binding | violation_binding | binding )+ "}"
+deontic_category: "duty" | "claim" | "prohibition" | "protection" | "liberty" | "no-claim"
+
+
+holder_binding: "holder" ":" top_ext_agent_or
+counterparty_binding: "counterparty" ":" top_ext_agent_or
+action_binding: "action" ":" top_action_seq
+target_binding: "target" ":" condition
+consequence_binding: "consequence" ":" top_action_seq
+violation_binding: "violation" ":" neg_condition
+
+
+// extended agent qualification expressions work as extended conditions expressions
+top_ext_agent_or: top_ext_agent_and (("or" | ";") top_ext_agent_and)*
+top_ext_agent_and: ext_agent (("and" | ",") ext_agent)*
+ext_agent: ("not")? neg_agent        
+neg_agent: ("~")? agent
+
+
+agent: descriptor | "*"
+
+
+%import common.INT
+%import common.NUMBER
+
+
+COMMENT : "%" /.*/
+| "//" /.*/
+| "/*" /.*/ "*/"
+
+
+%ignore COMMENT
+
+
+%import common.WS
+%ignore WS
