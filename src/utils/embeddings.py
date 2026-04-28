@@ -26,7 +26,7 @@ def score_vectors(
     """
     a_norm = F.normalize(a, p=2, dim=-1)
     b_norm = F.normalize(b, p=2, dim=-1)
-    return float(torch.dot(a_norm, b_norm))
+    return float(torch.dot(a_norm, b_norm))  # pyright: ignore[reportPrivateImportUsage]
 
 
 def get_encoder(cfg: EmbeddingModelConfig) -> SentenceTransformer:

@@ -316,7 +316,7 @@ class AnthropicInferenceModel(InferenceModel):
         applied_temperature = 1.0 if thinking_on else params.temperature
         max_tokens = (
             params.reasoning_budget + self._OUTPUT_TOKEN_HEADROOM
-            if thinking_on
+            if params.reasoning_budget is not None
             else self._OUTPUT_TOKEN_HEADROOM
         )
 
@@ -331,8 +331,7 @@ class AnthropicInferenceModel(InferenceModel):
             kwargs["top_p"] = params.top_p
         if params.top_k:
             kwargs["top_k"] = params.top_k
-        if thinking_on:
-            assert params.reasoning_budget is not None
+        if params.reasoning_budget is not None:
             kwargs["thinking"] = {
                 "type": "enabled",
                 "budget_tokens": params.reasoning_budget,
@@ -430,9 +429,9 @@ class GoogleInferenceModel(InferenceModel):
             params=params,
             text=result.text or "",
             stats=InferenceStats(
-                completion_tokens=usage.candidates_token_count,
-                prompt_tokens=usage.prompt_token_count,
-                total_tokens=usage.total_token_count,
+                completion_tokens=usage.candidates_token_count or -1,
+                prompt_tokens=usage.prompt_token_count or -1,
+                total_tokens=usage.total_token_count or -1,
             )
             if usage
             else InferenceStats(),
