@@ -10,18 +10,13 @@ from queue import Queue
 from typing import Any
 
 import jsonschema
-import lark
+import jsonschema.exceptions
 import torch
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 from pydantic import BaseModel, Field
 from sentence_transformers import SentenceTransformer
 
-from src.config import (
-    Config,
-    DSLConfig,
-    DSLValidationConfig,
-    ValidationFormat,
-)
+from src.config import Config, DSLConfig
 from src.utils.embeddings import get_encoder, score_vectors
 from src.utils.models import InferenceModel, InferenceOutput, InferenceParams, get_model
 
@@ -35,7 +30,6 @@ class Scenario(BaseModel):
 
 
 class FewShotExample(BaseModel):
-    validation_kind: ValidationFormat
     input: str
     output: str
 
@@ -47,7 +41,6 @@ class AblationFlags(BaseModel):
 
 class DSLSetup(BaseModel):
     name: str
-    validation: ValidationFormat
 
 
 class MirroringPipelineOutput(BaseModel):
@@ -90,12 +83,11 @@ class MirroringPipeline:
         self.tmpl_encode = self.tmpl_env.get_template("encode.jinja")
         self.tmpl_decode = self.tmpl_env.get_template("decode.jinja")
 
-        self.dsl_definitions: dict[str, dict[ValidationFormat, str]] = {}
+        # DSL name -> raw JSON-schema text
+        self.dsl_schemas: dict[str, str] = {}
         for dsl in cfg.dsl:
-            for validation in dsl.validation:
-                with open(validation.path, "r") as f:
-                    self.dsl_definitions.setdefault(
-                        dsl.name, {})[validation.kind] = f.read()
+            with open(dsl.schema_path, "r") as f:
+                self.dsl_schemas[dsl.name] = f.read()
 
         self.encoders: dict[str, SentenceTransformer] = {}
         for encoding in self.cfg.encodings:
@@ -131,31 +123,29 @@ class MirroringPipeline:
                 logging.info(f"Running scenario: {scenario.id}")
                 for dsl in self.cfg.dsl:
                     logging.info(f"- DSL: {dsl.name}")
-                    for validation in dsl.validation:
-                        logging.info(f"- Validation: {validation.kind}")
-                        for abl in [
-                            AblationFlags(syntax=False, few_shot=False),
-                            AblationFlags(syntax=True, few_shot=False),
-                            AblationFlags(syntax=False, few_shot=True),
-                            AblationFlags(syntax=True, few_shot=True),
-                        ]:
-                            logging.info(f"- Syntax: {abl.syntax}")
-                            logging.info(f"- Few-shot: {abl.few_shot}")
+                    for abl in [
+                        AblationFlags(syntax=False, few_shot=False),
+                        AblationFlags(syntax=True, few_shot=False),
+                        AblationFlags(syntax=False, few_shot=True),
+                        AblationFlags(syntax=True, few_shot=True),
+                    ]:
+                        logging.info(f"- Syntax: {abl.syntax}")
+                        logging.info(f"- Few-shot: {abl.few_shot}")
 
-                            for temp, top_p, top_k in inference_profiles:
-                                params = InferenceParams(
-                                    temperature=temp,
-                                    top_p=top_p,
-                                    top_k=top_k
-                                )
-                                logging.info(f"- Params: {params}")
+                        for temp, top_p, top_k in inference_profiles:
+                            params = InferenceParams(
+                                temperature=temp,
+                                top_p=top_p,
+                                top_k=top_k
+                            )
+                            logging.info(f"- Params: {params}")
 
-                                self.output.put(
-                                    self.produce_datapoint(
-                                        scenario, dsl, validation, model, abl, params)
-                                )
+                            self.output.put(
+                                self.produce_datapoint(
+                                    scenario, dsl, model, abl, params)
+                            )
 
-                            logging.info("✓ Done")
+                        logging.info("✓ Done")
 
         self.output.put(None)   # tell the writer to finish
         t.join()
@@ -180,29 +170,22 @@ class MirroringPipeline:
         self,
         scenario: Scenario,
         dsl: DSLConfig,
-        validation: DSLValidationConfig,
         model: InferenceModel,
         ablation: AblationFlags,
         params: InferenceParams,
     ) -> MirroringPipelineOutput:
 
         symbolic_output1 = self.generate_symbolic(
-            scenario.description, dsl, validation, model, ablation, params)
+            scenario.description, dsl, model, ablation, params)
 
         decode_prompt = self.tmpl_decode.render({
             "dsl_input": symbolic_output1.text,
             "ablation": ablation.model_dump(),
             "dsl": dsl,
-            "validation": {
-                "definition": self.dsl_definitions[dsl.name][validation.kind],
-                **validation.model_dump()
-            },
+            "schema": self.dsl_schemas[dsl.name],
             "examples": [
                 # reverse input/output for decoding
-                FewShotExample(
-                    validation_kind=validation.kind,
-                    input=ex.output,
-                    output=ex.input)
+                FewShotExample(input=ex.output, output=ex.input)
                 for ex in self.examples[dsl.name]
             ]
         })
@@ -212,7 +195,7 @@ class MirroringPipeline:
         logging.debug(f"output: {natural_language}")
 
         symbolic_output2 = self.generate_symbolic(
-            natural_language.text, dsl, validation, model, ablation, params)
+            natural_language.text, dsl, model, ablation, params)
 
         semantic_scores: dict[str, float] = {}
         for encoding, encoder in self.encoders.items():
@@ -225,7 +208,7 @@ class MirroringPipeline:
         return MirroringPipelineOutput(
             scenario_id=scenario.id,
             model=model.name,
-            dsl=DSLSetup(name=dsl.name, validation=validation.kind),
+            dsl=DSLSetup(name=dsl.name),
             ablation=ablation,
             symbolic_output1=symbolic_output1,
             symbolic_output2=symbolic_output2,
@@ -238,20 +221,19 @@ class MirroringPipeline:
         self,
         scenario: str,
         dsl: DSLConfig,
-        validation: DSLValidationConfig,
         model: InferenceModel,
         ablation: AblationFlags,
         params: InferenceParams,
     ) -> InferenceOutput:
         assert self.cfg.max_syntax_retries > 0
 
-        dsl_definition = self.dsl_definitions[dsl.name][validation.kind]
+        schema_text = self.dsl_schemas[dsl.name]
 
         encode_prompt = self.tmpl_encode.render({
             "scenario": scenario,
             "ablation": ablation.model_dump(),
             "dsl": dsl,
-            "validation": {"definition": dsl_definition, **validation.model_dump()},
+            "schema": schema_text,
             "examples": self.examples[dsl.name],
             "attempt": None
         })
@@ -262,12 +244,7 @@ class MirroringPipeline:
         err = ""
         output = model.generate(encode_prompt, params)
         for i in range(self.cfg.max_syntax_retries):
-            match validation.kind:
-                case ValidationFormat.JSON_SCHEMA:
-                    ok, err = self.validate_json(output.text, dsl.name)
-                case ValidationFormat.BNF:
-                    ok, err = self.validate_bnf(output.text, dsl.name)
-
+            ok, err = self.validate_json(output.text, dsl.name)
             if ok:
                 break
 
@@ -275,7 +252,7 @@ class MirroringPipeline:
                 "scenario": scenario,
                 "ablation": ablation.model_dump(),
                 "dsl": dsl,
-                "validation": {"definition": dsl_definition, **validation.model_dump()},
+                "schema": schema_text,
                 "examples": self.examples[dsl.name],
                 "attempt": {
                     "previous": output.text,
@@ -294,20 +271,61 @@ class MirroringPipeline:
         return output
 
     def validate_json(self, s: str, dsl: str) -> tuple[bool, str]:
-        schema = json.loads(
-            self.dsl_definitions[dsl][ValidationFormat.JSON_SCHEMA])
-        try:
-            raw = json.loads(s)
-            jsonschema.validate(instance=raw, schema=schema)
-            return (True, "")
-        except (json.JSONDecodeError, jsonschema.ValidationError) as e:
-            logging.debug(e)
-            return (False, str(e))
+        """Validate `s` against the DSL's JSON schema.
 
-    def validate_bnf(self, s: str, dsl: str) -> tuple[bool, str]:
-        parser = lark.Lark(self.dsl_definitions[dsl][ValidationFormat.BNF])
+        Returns `(ok, err)`. The error message is engineered for the LLM
+        self-refinement loop: it (1) names the failure mode (parse vs schema),
+        (2) quotes the offending region of the model's own output, (3) surfaces
+        the failing keyword, JSON path, and required value, and (4) ends with
+        a concrete "Fix:" line. Without this shape small models tend to either
+        re-emit the same mistake or "fix" the wrong layer (e.g. retype a
+        well-formed value when the actual problem was a missing required key).
+        """
+        schema = json.loads(self.dsl_schemas[dsl])
         try:
-            parser.parse(s)  # type: ignore
+            instance = json.loads(s)
+        except json.JSONDecodeError as e:
+            # Quote a small window around the offending byte so the model can
+            # see *its own* characters that broke the parse, not just an offset.
+            start = max(0, e.pos - 40)
+            end = min(len(s), e.pos + 40)
+            snippet = s[start:end].replace("\n", "\\n")
+            err = (
+                f"The output is not valid JSON.\n"
+                f"Parser error: {e.msg} at line {e.lineno}, column {e.colno}.\n"
+                f"Context (around the failure): ...{snippet}...\n"
+                f"Fix: produce a single well-formed JSON document with no "
+                f"surrounding prose, markdown, or code fences."
+            )
+            logging.debug(err)
+            return (False, err)
+
+        try:
+            jsonschema.validate(instance=instance, schema=schema)
             return (True, "")
-        except lark.UnexpectedInput as e:
-            return (False, str(e))
+        except jsonschema.ValidationError as e:
+            path = "/" + \
+                "/".join(str(p) for p in e.absolute_path) if e.absolute_path else "<root>"
+            err = (
+                f"The output is valid JSON but does not conform to the schema.\n"
+                f"Failing keyword: {e.validator}\n"
+                f"Schema requirement: {json.dumps(e.validator_value)[:200]}\n"
+                f"JSON path of the failure: {path}\n"
+                f"Offending value: {json.dumps(e.instance)[:200]}\n"
+                f"Reason: {e.message}\n"
+                f"Fix: change the value at {path} so that the "
+                f"`{e.validator}` constraint above is satisfied."
+            )
+            # For oneOf/anyOf failures, the top-level message is generic
+            # ("is not valid under any of the given schemas"); the actionable
+            # detail lives in `e.context`. `best_match` picks the most specific
+            # branch error so the model sees the precise field that failed.
+            if e.context:
+                best = jsonschema.exceptions.best_match(e.context)
+                best_path = "/" + "/".join(str(p) for p in best.absolute_path) \
+                    if best.absolute_path else "<root>"
+                err += (
+                    f"\nMost specific sub-error: {best.message} at {best_path}"
+                )
+            logging.debug(err)
+            return (False, err)

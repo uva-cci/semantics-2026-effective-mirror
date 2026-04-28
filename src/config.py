@@ -7,20 +7,10 @@ import yaml
 from pydantic import BaseModel, Field, FilePath
 
 
-class ValidationFormat(StrEnum):
-    JSON_SCHEMA = "json-schema"
-    BNF = "bnf"
-
-
-class DSLValidationConfig(BaseModel):
-    kind: ValidationFormat
-    path: FilePath
-
-
 class DSLConfig(BaseModel):
     name: str
     examples: FilePath
-    validation: list[DSLValidationConfig]
+    schema_path: FilePath = Field(alias="schema")
 
 
 class OllamaLocalModelParams(BaseModel):

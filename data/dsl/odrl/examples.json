@@ -1,26 +1,21 @@
 [
   {
-    "validation_kind": "json-schema",
     "input": "Asset 9898 can be reproduced but not modified",
     "output": "{\"policytype\":\"http://www.w3.org/ns/odrl/2/Set\",\"policyid\":\"http://example.com/policy:0099\",\"permissions\":[{\"target\":\"http://example.com/asset:9898\",\"action\":\"http://www.w3.org/ns/odrl/2/reproduce\"}],\"prohibitions\":[{\"target\":\"http://example.com/asset:9898\",\"action\":\"http://www.w3.org/ns/odrl/2/modify\"}]}"
   },
   {
-    "validation_kind": "json-schema",
     "input": "A user may listen to or make a single copy of a song, provided they pay 0.50 AUD.",
     "output": "{\"policytype\":\"http://www.w3.org/ns/odrl/2/Offer\",\"policyid\":\"http://example.com/policy:0231\",\"permissions\":[{\"target\":\"http://example.com/music:4545\",\"action\":\"http://www.w3.org/ns/odrl/2/play\",\"assigner\":\"http://example.com/sony:10\",\"duties\":[{\"action\":\"http://www.w3.org/ns/odrl/2/compensate\",\"constraints\":[{\"name\":\"http://www.w3.org/ns/odrl/2/payAmount\",\"operator\":\"http://www.w3.org/ns/odrl/2/eq\",\"rightoperand\":\"0.50\",\"rightoperanddatatype\":\"http://www.w3.org/2001/XMLSchema#decimal\",\"rightoperandunit\":\"http://cvx.iptc.org/iso4217a/AUD\"}]}]},{\"target\":\"http://example.com/music:4545\",\"action\":\"http://www.w3.org/ns/odrl/2/copy\",\"constraints\":[{\"name\":\"http://www.w3.org/ns/odrl/2/count\",\"operator\":\"http://www.w3.org/ns/odrl/2/lteq\",\"rightoperand\":\"1\"}],\"assigner\":\"http://example.com/sony:10\",\"duties\":[{\"action\":\"http://www.w3.org/ns/odrl/2/compensate\",\"constraints\":[{\"name\":\"http://www.w3.org/ns/odrl/2/payAmount\",\"operator\":\"http://www.w3.org/ns/odrl/2/eq\",\"rightoperand\":\"0.50\",\"rightoperanddatatype\":\"http://www.w3.org/2001/XMLSchema#decimal\",\"rightoperandunit\":\"http://cvx.iptc.org/iso4217a/AUD\"}]}]}]}"
   },
   {
-    "validation_kind": "json-schema",
     "input": "Billie may play or make a single copy of the song, as long as she pays 0.50 AUD.",
     "output": "{\"policytype\":\"http://www.w3.org/ns/odrl/2/Agreement\",\"policyid\":\"http://example.com/policy:9001\",\"permissions\":[{\"target\":\"http://example.com/music:4545\",\"action\":\"http://www.w3.org/ns/odrl/2/play\",\"assigner\":\"http://example.com/sony:10\",\"assignee\":\"http://example.com/billie:888\",\"duties\":[{\"action\":\"http://www.w3.org/ns/odrl/2/compensate\",\"constraints\":[{\"name\":\"http://www.w3.org/ns/odrl/2/payAmount\",\"operator\":\"http://www.w3.org/ns/odrl/2/eq\",\"rightoperand\":\"0.50\",\"rightoperanddatatype\":\"http://www.w3.org/2001/XMLSchema#decimal\",\"rightoperandunit\":\"http://cvx.iptc.org/iso4217a/AUD\"}]}]},{\"target\":\"http://example.com/music:4545\",\"action\":\"http://www.w3.org/ns/odrl/2/copy\",\"constraints\":[{\"name\":\"http://www.w3.org/ns/odrl/2/count\",\"operator\":\"http://www.w3.org/ns/odrl/2/lteq\",\"rightoperand\":\"1\"}],\"assigner\":\"http://example.com/sony:10\",\"assignee\":\"http://example.com/billie:888\",\"duties\":[{\"action\":\"http://www.w3.org/ns/odrl/2/compensate\",\"constraints\":[{\"name\":\"http://www.w3.org/ns/odrl/2/payAmount\",\"operator\":\"http://www.w3.org/ns/odrl/2/eq\",\"rightoperand\":\"0.50\",\"rightoperanddatatype\":\"http://www.w3.org/2001/XMLSchema#decimal\",\"rightoperandunit\":\"http://cvx.iptc.org/iso4217a/AUD\"}]}]}]}"
   },
   {
-    "validation_kind": "json-schema",
     "input": "A guest may view a news article.",
     "output": "{\"policytype\":\"http://www.w3.org/ns/odrl/2/Request\",\"policyid\":\"http://example.com/policy:04311\",\"permissions\":[{\"target\":\"http://example.com/news:0099\",\"action\":\"http://www.w3.org/ns/odrl/2/display\",\"assignee\":\"http://example.com/guest:0589\"}]}"
   },
   {
-    "validation_kind": "json-schema",
     "input": "Billie may play the song, but she is not allowed to use it as a ringtone.",
     "output": "{\"policytype\":\"http://www.w3.org/ns/odrl/2/Agreement\",\"policyid\":\"http://example.com/policy:3433\",\"conflict\":\"perm\",\"permissions\":[{\"target\":\"http://example.com/music:1234908\",\"action\":\"http://www.w3.org/ns/odrl/2/play\",\"assigner\":\"http://example.com/sony:10\",\"assignee\":\"http://example.com/billie:888\"}],\"prohibitions\":[{\"target\":\"http://example.com/music:1234908\",\"action\":\"http://oma.org/drm:ringtone\",\"assigner\":\"http://example.com/sony:10\",\"assignee\":\"http://example.com/billie:888\"}]}\n"
   }

@@ -5,10 +5,9 @@ Your task is to transform the following normative scenario into a precise specif
 {% if ablation.syntax %}
 ## Context
 - **DSL Name**: `{{ dsl.name }}`
-- **DSL Syntax Type**: `{{ validation.kind }}`
-- **Syntax Definition**: 
+- **JSON Schema**:
 
-{{ validation.definition }}
+{{ schema }}
 {% endif %}
 
 ## Input Scenario
@@ -16,10 +15,10 @@ Your task is to transform the following normative scenario into a precise specif
 {{ scenario }}
 
 ## Output Requirements
-1. **Format** - Produce the specification **exactly** in the syntax defined above.
+1. **Format** - Produce a single JSON document that conforms **exactly** to the JSON schema above.
 2. **No extra text** - Do **not** add comments, explanations, or surrounding code fences.
-3. **Validity** - Ensure the output conforms to the syntax rules (e.g., valid JSON if JSON-Schema, valid code if BNF).
-4. **Precision** - If the scenario contains ambiguous or missing details, output the specification with placeholders (e.g., `__UNKNOWN__`) but *do not* invent values.
+3. **Validity** - The output must parse as JSON and validate against the schema.
+4. **Precision** - If the scenario contains ambiguous or missing details, use placeholders (e.g., `__UNKNOWN__`) but *do not* invent values.
 
 {% if ablation.few_shot %}
 
@@ -35,18 +34,19 @@ Your task is to transform the following normative scenario into a precise specif
 {% endif %}
 
 {% if attempt %}
-## Your previous attempt
+## Your previous attempt was rejected by the JSON-schema validator
 
-You previously generated the following syntax:
+Previous output:
 
 {{ attempt.previous }}
 
-Resulting in the following error:
+Validator feedback:
 
 {{ attempt.error }}
 
+Produce a corrected JSON document that addresses the feedback above.
 {% endif %}
 
 ## Final Output
-Respond **only** with the specification in the DSL syntax.
+Respond **only** with the JSON specification.
 Do **not** add any surrounding Markdown, code fences, or explanatory text.
