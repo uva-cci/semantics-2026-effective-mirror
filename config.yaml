@@ -54,6 +54,12 @@ models:
       provider: openai
       model_id: gpt-5.5-thinking-preview
 
+  - name: gpt-5.5-flash
+    meta:
+      kind: cloud
+      provider: openai
+      model_id: gpt-5.5-flash-2026-04-23
+
   - name: claude-opus-4.7
     meta:
       kind: cloud
@@ -65,12 +71,6 @@ models:
       kind: cloud
       provider: anthropic
       model_id: claude-mythos-20260406
-
-  - name: gpt-5.5-flash
-    meta:
-      kind: cloud
-      provider: openai
-      model_id: gpt-5.5-flash-2026-04-23
 
   - name: gemini-3.1-pro
     meta:
@@ -89,11 +89,32 @@ encodings:
     org: perplexity-ai
 
 inference:
-  temperature: [0.0, 0.2, 0.5, 0.8, 1.0]
-  top_p: [0.8, 0.9, 0.95, 0.99]
-  top_k: [40, 80, 200, 0]
   concurrency:
     ollama: 1
     openai: 8
     anthropic: 4
     google: 4
+
+  constants:
+    seed: 42
+    top_k: 0
+    repetition_penalty: 1.1
+
+  defaults:
+    temperature: [0.0, 0.4, 0.7, 1.0, 1.2]
+    top_p: [0.9, 1.0]
+
+  per_backend:
+    ollama:
+      truncation:
+        - { name: "top_p_baseline", top_p: 0.9, min_p: null }
+        - { name: "min_p_low",      top_p: 1.0, min_p: 0.05 }
+        - { name: "min_p_med",      top_p: 1.0, min_p: 0.10 }
+        - { name: "min_p_high",     top_p: 1.0, min_p: 0.20 }
+    openai:
+      reasoning_effort: ["low", "medium", "high", "xhigh"]
+      text_verbosity: ["low", "medium"]
+    anthropic:
+      reasoning_budget: [1024, 4096, 16384, 32768]
+    google:
+      reasoning_budget: [1024, 4096, 16384, 32768]

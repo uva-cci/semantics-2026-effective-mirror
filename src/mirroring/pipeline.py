@@ -1,5 +1,4 @@
 import asyncio
-import itertools
 import json
 import logging
 import os
@@ -19,7 +18,13 @@ from sentence_transformers import SentenceTransformer
 
 from src.config import Config, DSLConfig
 from src.utils.embeddings import get_encoder, score_vectors
-from src.utils.models import InferenceModel, InferenceOutput, InferenceParams, get_model
+from src.utils.models import (
+    InferenceModel,
+    InferenceOutput,
+    InferenceParams,
+    expand_for_backend,
+    get_model,
+)
 
 PROMPTS_PATH = Path(__file__).resolve().parent / "prompts"
 
@@ -117,13 +122,6 @@ class MirroringPipeline:
         )
         t.start()
 
-        # create permutations of inference parameters based on the config
-        inference_profiles = list(itertools.product(
-            self.cfg.inference.temperature,
-            self.cfg.inference.top_p,
-            self.cfg.inference.top_k,
-        ))
-
         ablations = [
             AblationFlags(syntax=False, few_shot=False),
             AblationFlags(syntax=True, few_shot=False),
@@ -135,13 +133,16 @@ class MirroringPipeline:
             logging.info(f"- Model: {model_cfg.name}")
             model = get_model(model_cfg, self.cfg.inference.concurrency)
 
+            # Per-model matrix: each backend only sweeps the axes its API
+            # consumes (declared on the InferenceModel subclass).
+            profiles = expand_for_backend(self.cfg.inference, model)
+
             tasks = [
-                self._run_task(scenario, dsl, model, abl, InferenceParams(
-                    temperature=temp, top_p=top_p, top_k=top_k))
+                self._run_task(scenario, dsl, model, abl, params)
                 for scenario in self.scenarios
                 for dsl in self.cfg.dsl
                 for abl in ablations
-                for (temp, top_p, top_k) in inference_profiles
+                for params in profiles
             ]
 
             logging.info(f"Dispatching {len(tasks)} datapoint(s) for {model.name}")

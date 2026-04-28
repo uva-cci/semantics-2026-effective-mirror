@@ -4,7 +4,7 @@ from enum import StrEnum
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, Field, FilePath
+from pydantic import BaseModel, ConfigDict, Field, FilePath
 
 
 class DSLConfig(BaseModel):
@@ -53,12 +53,65 @@ class InferenceConcurrencyConfig(BaseModel):
     google: int = 4
 
 
-class InferenceParamsConfig(BaseModel):
+class InferenceConstants(BaseModel):
+    """Fixed values applied to every cell of the matrix for backends that consume them."""
+    model_config = ConfigDict(extra="forbid")
+    seed: int
+    top_k: int
+    repetition_penalty: float
+
+
+class InferenceDefaults(BaseModel):
+    """Sweep axes shared across backends. Each backend pulls only the axes its API supports."""
+    model_config = ConfigDict(extra="forbid")
     temperature: list[float]
     top_p: list[float]
-    top_k: list[int]
+
+
+class TruncationProfile(BaseModel):
+    """A tagged tuple binding `top_p` and `min_p` together as a single sampling-strategy cell."""
+    model_config = ConfigDict(extra="forbid")
+    name: str
+    top_p: float
+    min_p: float | None
+
+
+class OllamaInferenceConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    truncation: list[TruncationProfile]
+
+
+class OpenAIInferenceConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    reasoning_effort: list[Literal["low", "medium", "high", "xhigh"]]
+    text_verbosity: list[Literal["low", "medium"]]
+
+
+class AnthropicInferenceConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    reasoning_budget: list[int]
+
+
+class GoogleInferenceConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    reasoning_budget: list[int]
+
+
+class InferencePerBackend(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    ollama: OllamaInferenceConfig
+    openai: OpenAIInferenceConfig
+    anthropic: AnthropicInferenceConfig
+    google: GoogleInferenceConfig
+
+
+class InferenceParamsConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     concurrency: InferenceConcurrencyConfig = Field(
         default_factory=InferenceConcurrencyConfig)
+    constants: InferenceConstants
+    defaults: InferenceDefaults
+    per_backend: InferencePerBackend
 
 
 class Config(BaseModel):
