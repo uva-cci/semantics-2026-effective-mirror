@@ -1,14 +1,14 @@
 [
   {
     "input": "If you smoke here, you have to pay a fine",
-    "output": "{\"event\":\"person.#smoke\",\"reaction\":{\"plus\":{\"position\":\"duty\",\"holder\":\"person\",\"counterparty\":\"officer\",\"action\":\"#pay\"}}}"
+    "output": "[{\"event\":\"person.#smoke\",\"reaction\":{\"plus\":{\"position\":\"duty\",\"holder\":\"person\",\"counterparty\":\"officer\",\"action\":\"#pay\"}}}]"
   },
   {
     "input": "Raising one's hand is considered a bid only while there is an ongoing auction",
-    "output": "{\"condition\":\"auction\",\"conclusion\":{\"event\":\"#raise_hand\",\"reaction\":{\"plus\":\"bet\"}}\n}"
+    "output": "[{\"condition\":\"auction\",\"conclusion\":{\"event\":\"#raise_hand\",\"reaction\":{\"plus\":\"bet\"}}}]"
   },
   {
     "input": "Student or staff can register as member of the library by using their id card",
-    "output": "{\"position\":\"power\",\"holder\":\"student | staff\",\"action\":{\"reference\":\"#register\",\"refinement\":{\"instrument\":\"holder.id_card\"}},\"consequence\":{\"entity\":\"holder\",\"in\":\"member\"}}"
+    "output": "[{\"position\":\"power\",\"holder\":\"student | staff\",\"action\":{\"reference\":\"#register\",\"refinement\":{\"instrument\":\"holder.id_card\"}},\"consequence\":{\"entity\":\"holder\",\"in\":\"member\"}}]"
   }
 ]

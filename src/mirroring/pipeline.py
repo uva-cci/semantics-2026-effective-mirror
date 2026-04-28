@@ -55,11 +55,10 @@ class MirroringPipelineOutput(BaseModel):
     ablation: AblationFlags
     dsl: DSLSetup
     model: str
-    created_at: datetime = Field(
-        default_factory=lambda: datetime.now(tz=timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(tz=timezone.utc))
     symbolic_output1: InferenceOutput
-    symbolic_output2: InferenceOutput
-    natural_language: InferenceOutput
+    symbolic_output2: InferenceOutput | None = None
+    natural_language: InferenceOutput | None = None
     legenda: InferenceOutput
     # encoder -> score
     semantic_scores: dict[str, float]
@@ -67,7 +66,6 @@ class MirroringPipelineOutput(BaseModel):
 
 
 class MirroringPipeline:
-
     def __init__(self, cfg: Config, scenarios: list[Scenario]) -> None:
         self.cfg = cfg
         self.scenarios = scenarios
@@ -132,9 +130,7 @@ class MirroringPipeline:
             output_path = Path(f"output-{stamp}.ndjson")
 
         t = threading.Thread(
-            target=self.writer_worker,
-            args=(output_path,),
-            daemon=True
+            target=self.writer_worker, args=(output_path,), daemon=True
         )
         t.start()
 
@@ -165,7 +161,7 @@ class MirroringPipeline:
             await asyncio.gather(*tasks)
             logging.info(f"✓ Done with {model.name}")
 
-        self.output.put(None)   # tell the writer to finish
+        self.output.put(None)  # tell the writer to finish
         t.join()
 
         logging.info(f"Pipeline {self.__class__.__name__} completed")
@@ -214,36 +210,54 @@ class MirroringPipeline:
         legenda = await self.generate_legenda(scenario, model, params)
 
         symbolic_output1 = await self.generate_symbolic(
-            scenario.description, dsl, model, ablation, params, legenda.text)
+            scenario.description, dsl, model, ablation, params, legenda.text
+        )
 
-        decode_prompt = self.tmpl_decode.render({
-            "dsl_input": symbolic_output1.text,
-            "ablation": ablation.model_dump(),
-            "dsl": dsl,
-            "schema": self.dsl_schemas[dsl.name],
-            "legenda": legenda.text,
-            "examples": [
-                # reverse input/output for decoding
-                FewShotExample(input=ex.output, output=ex.input)
-                for ex in self.examples[dsl.name]
-            ]
-        })
-
-        logging.debug(decode_prompt)
-        natural_language = await model.generate(decode_prompt, params)
-        logging.debug(f"output: {natural_language}")
-
-        symbolic_output2 = await self.generate_symbolic(
-            natural_language.text, dsl, model, ablation, params, legenda.text)
-
+        natural_language: InferenceOutput | None = None
+        symbolic_output2: InferenceOutput | None = None
         semantic_scores: dict[str, float] = {}
-        for encoding, encoder in self.encoders.items():
-            async with self.encoder_locks[encoding]:
-                a, b = await asyncio.to_thread(
-                    self._encode_pair,
-                    encoder, scenario.description, natural_language.text,
-                )
-            semantic_scores[encoding] = score_vectors(a, b)
+
+        if symbolic_output1.success:
+            decode_prompt = self.tmpl_decode.render(
+                {
+                    "dsl_input": symbolic_output1.text,
+                    "ablation": ablation.model_dump(),
+                    "dsl": dsl,
+                    "schema": self.dsl_schemas[dsl.name],
+                    "legenda": legenda.text,
+                    "examples": [
+                        # reverse input/output for decoding
+                        FewShotExample(input=ex.output, output=ex.input)
+                        for ex in self.examples[dsl.name]
+                    ],
+                }
+            )
+
+            logging.debug(decode_prompt)
+            natural_language = await model.generate(decode_prompt, params)
+            logging.debug(f"output: {natural_language}")
+
+            symbolic_output2 = await self.generate_symbolic(
+                natural_language.text, dsl, model, ablation, params, legenda.text
+            )
+
+            for encoding, encoder in self.encoders.items():
+                async with self.encoder_locks[encoding]:
+                    a, b = await asyncio.to_thread(
+                        self._encode_pair,
+                        encoder,
+                        scenario.description,
+                        natural_language.text,
+                    )
+                semantic_scores[encoding] = score_vectors(a, b)
+        else:
+            logging.info(
+                f"  ⤼ skipping decode/re-encode for {model.name} | "
+                f"scenario={scenario.id} dsl={dsl.name} "
+                f"syntax={ablation.syntax} few_shot={ablation.few_shot}: "
+                f"symbolic_output1 failed validation after "
+                f"{symbolic_output1.attempts} attempt(s)"
+            )
 
         return MirroringPipelineOutput(
             scenario_id=scenario.id,
@@ -255,12 +269,14 @@ class MirroringPipeline:
             natural_language=natural_language,
             legenda=legenda,
             semantic_scores=semantic_scores,
-            symbolic_equivalence=False  # TODO: run symbolic static analysis
+            symbolic_equivalence=False,  # TODO: run symbolic static analysis
         )
 
     @staticmethod
     def _encode_pair(
-        encoder: SentenceTransformer, a_text: str, b_text: str,
+        encoder: SentenceTransformer,
+        a_text: str,
+        b_text: str,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         a = encoder.encode(a_text, convert_to_tensor=True, show_progress_bar=False)
         b = encoder.encode(b_text, convert_to_tensor=True, show_progress_bar=False)
@@ -294,13 +310,18 @@ class MirroringPipeline:
                 return self.legendas[key]
 
             def render(attempt: dict | None) -> str:
-                return self.tmpl_legenda.render({
-                    "scenario": scenario.description,
-                    "attempt": attempt,
-                })
+                return self.tmpl_legenda.render(
+                    {
+                        "scenario": scenario.description,
+                        "attempt": attempt,
+                    }
+                )
 
             output = await self._generate_validated(
-                render, self.legenda_schema_text, model, params,
+                render,
+                self.legenda_schema_text,
+                model,
+                params,
             )
             self.legendas[key] = output
             return output
@@ -318,15 +339,17 @@ class MirroringPipeline:
         examples = self.examples[dsl.name]
 
         def render(attempt: dict | None) -> str:
-            return self.tmpl_encode.render({
-                "scenario": scenario,
-                "ablation": ablation.model_dump(),
-                "dsl": dsl,
-                "schema": schema_text,
-                "examples": examples,
-                "legenda": legenda,
-                "attempt": attempt,
-            })
+            return self.tmpl_encode.render(
+                {
+                    "scenario": scenario,
+                    "ablation": ablation.model_dump(),
+                    "dsl": dsl,
+                    "schema": schema_text,
+                    "examples": examples,
+                    "legenda": legenda,
+                    "attempt": attempt,
+                }
+            )
 
         return await self._generate_validated(render, schema_text, model, params)
 
@@ -352,11 +375,13 @@ class MirroringPipeline:
 
         ok = False
         err = ""
+        errors: list[str] = []
         output = await model.generate(prompt, params)
         for i in range(self.cfg.max_syntax_retries):
             ok, err = self.validate_json(output.text, schema_text)
             if ok:
                 break
+            errors.append(err)
 
             prompt = render_prompt({"previous": output.text, "error": err})
             logging.debug(prompt)
@@ -366,7 +391,15 @@ class MirroringPipeline:
 
             logging.debug(f"output: {output}")
 
+        # Validate the final retry too, otherwise the trail stops one error
+        # short of the text that's actually being emitted on the row.
+        if not ok:
+            ok, err = self.validate_json(output.text, schema_text)
+            if not ok:
+                errors.append(err)
+
         output.success = ok
+        output.errors = errors
         return output
 
     def validate_json(self, s: str, schema_text: str) -> tuple[bool, str]:
@@ -403,8 +436,11 @@ class MirroringPipeline:
             jsonschema.validate(instance=instance, schema=schema)
             return (True, "")
         except jsonschema.ValidationError as e:
-            path = "/" + \
-                "/".join(str(p) for p in e.absolute_path) if e.absolute_path else "<root>"
+            path = (
+                "/" + "/".join(str(p) for p in e.absolute_path)
+                if e.absolute_path
+                else "<root>"
+            )
             err = (
                 f"The output is valid JSON but does not conform to the schema.\n"
                 f"Failing keyword: {e.validator}\n"
@@ -416,15 +452,50 @@ class MirroringPipeline:
                 f"`{e.validator}` constraint above is satisfied."
             )
             # For oneOf/anyOf failures, the top-level message is generic
-            # ("is not valid under any of the given schemas"); the actionable
-            # detail lives in `e.context`. `best_match` picks the most specific
-            # branch error so the model sees the precise field that failed.
+            # ("is not valid under any of the given schemas") and the
+            # actionable detail lives in `e.context` (one sub-error per
+            # branch). We list every branch verbatim instead of collapsing to
+            # `best_match`: at the directive-level oneOf, all variants share
+            # key shapes, so `best_match`'s depth-then-leaf scoring
+            # systematically promotes a shallow `required` failure from the
+            # wrong variant (e.g. "condition is required" against
+            # transformational_rule) over the deep regex failure of the
+            # variant the model is actually targeting (e.g. /0/action does
+            # not match the event regex against deontic_frame). Drilling each
+            # branch to its leaf is still done with `best_match` — within a
+            # single branch the heuristic is fine — so the model sees a
+            # pattern/regex-level message per variant rather than the generic
+            # nested-oneOf wrapper.
             if e.context:
-                best = jsonschema.exceptions.best_match(e.context)
-                best_path = "/" + "/".join(str(p) for p in best.absolute_path) \
-                    if best.absolute_path else "<root>"
+                def _leaf(s: jsonschema.ValidationError) -> jsonschema.ValidationError:
+                    while s.context:
+                        s = jsonschema.exceptions.best_match(s.context)
+                    return s
+                # `e.context` flattens to leaves across all branches and may
+                # repeat the same message verbatim (typically the
+                # `additionalProperties: false` failure, which fires on every
+                # variant whenever the model emits keys none of them want).
+                # Dedupe on the rendered string to keep the prompt compact
+                # while preserving each distinct failure mode the model can
+                # use to pick a target variant.
+                seen: set[str] = set()
+                lines: list[str] = []
+                for sub in e.context:
+                    leaf = _leaf(sub)
+                    leaf_path = (
+                        "/" + "/".join(str(p) for p in leaf.absolute_path)
+                        if leaf.absolute_path
+                        else "<root>"
+                    )
+                    line = f"  - {leaf.message} at {leaf_path}"
+                    if line in seen:
+                        continue
+                    seen.add(line)
+                    lines.append(line)
                 err += (
-                    f"\nMost specific sub-error: {best.message} at {best_path}"
+                    f"\nBranch errors (across every `{e.validator}` variant "
+                    f"in the order listed above; satisfy any single variant):\n"
+                    + "\n".join(lines)
                 )
             logging.debug(err)
             return (False, err)
