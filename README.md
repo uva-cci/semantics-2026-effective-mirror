@@ -30,7 +30,12 @@ Local Ollama models require `ollama serve` running on the host. By default the O
 
 ### Docker Execution
 
-The [`Dockerfile`](./Dockerfile) builds an image whose entrypoint is the `mirror` CLI. To avoid bloating the image with encoder binaries, the container expects `/app/data` to be mounted as a volume. Reuse that volume across invocations.
+The [`Dockerfile`](./Dockerfile) builds an image whose entrypoint is the `mirror` CLI. The container expects two mounts:
+
+- `/app/data` — project assets (scenarios + DSL grammars/schemas/examples), bind-mounted from the host so configs can reference them.
+- `/root/.cache/huggingface` — sentence-transformer encoder cache, persisted across container restarts so encoders are downloaded only once. A named Docker volume (e.g. `hf-cache`) or a host bind to your existing `~/.cache/huggingface` both work.
+
+Ollama models live in the daemon's own cache on the host, so no volume is needed for them inside the container.
 
 ```sh
 docker build -t semantics-2026-mirror .
@@ -45,6 +50,7 @@ docker run --rm -it \
   --env-file .env \
   -v "$(pwd)/config.cloud.yaml:/app/config.yaml" \
   -v "$(pwd)/data:/app/data" \
+  -v hf-cache:/root/.cache/huggingface \
   semantics-2026-mirror --config /app/config.yaml
 ```
 
@@ -59,6 +65,7 @@ docker run --rm -it \
   -e OLLAMA_HOST=http://host.docker.internal:11434 \
   -v "$(pwd)/config.local.yaml:/app/config.yaml" \
   -v "$(pwd)/data:/app/data" \
+  -v hf-cache:/root/.cache/huggingface \
   semantics-2026-mirror --config /app/config.yaml
 ```
 
@@ -70,6 +77,7 @@ docker run --rm -it \
   -e OLLAMA_HOST=http://localhost:11434 \
   -v "$(pwd)/config.local.yaml:/app/config.yaml" \
   -v "$(pwd)/data:/app/data" \
+  -v hf-cache:/root/.cache/huggingface \
   semantics-2026-mirror --config /app/config.yaml
 ```
 

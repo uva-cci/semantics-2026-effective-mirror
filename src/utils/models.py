@@ -10,10 +10,10 @@ from anthropic import Anthropic
 from google import genai as google_genai
 from openai import OpenAI
 from pydantic import BaseModel
+from tqdm import tqdm
 
 from src.config import (
     CloudModelConfig,
-    Config,
     LocalModelConfig,
     ModelConfig,
     OllamaLocalModelParams,
@@ -76,6 +76,38 @@ class OllamaInferenceModel(InferenceModel):
     def __init__(self, name: str, cfg: OllamaLocalModelParams) -> None:
         super().__init__(name)
         self.cfg = cfg
+        self._pull()
+
+    def _pull(self) -> None:
+        logging.info(f"Pulling Ollama model {self.cfg.model_id}")
+
+        bars: dict[str, tqdm] = {}
+        for event in ollama.pull(self.cfg.model_id, stream=True):
+            digest = getattr(event, "digest", None) or ""
+            total = getattr(event, "total", None) or 0
+            completed = getattr(event, "completed", None) or 0
+            status = getattr(event, "status", "") or ""
+
+            if digest and total:
+                bar = bars.get(digest)
+                if bar is None:
+                    bar = tqdm(
+                        total=total,
+                        desc=digest[:19],
+                        unit="B",
+                        unit_scale=True,
+                        unit_divisor=1024,
+                        dynamic_ncols=True,
+                        colour="cyan",
+                    )
+                    bars[digest] = bar
+                bar.n = completed
+                bar.refresh()
+            elif status:
+                logging.debug(f"ollama pull: {status}")
+
+        for bar in bars.values():
+            bar.close()
 
     @override
     def generate(self, prompt: str, params: InferenceParams) -> InferenceOutput:
@@ -240,24 +272,6 @@ def get_model(cfg: ModelConfig) -> InferenceModel:
                 case _:
                     raise ValueError(f"Unknown provider {cloud_meta.provider}")
     raise ValueError()
-
-
-async def download_models(cfg: Config) -> None:
-    logging.info("Pulling Ollama models.")
-
-    for model in cfg.models:
-        logging.info(f"Pulling model: {model.name}")
-
-        if model.meta.kind != "local":
-            logging.warning(f"Skipping cloud model entry: {model.name}")
-            continue
-
-        assert model.meta.params.model_id, "ollama driver requires model_id"
-        logging.info(f"Pulling ollama: {model.meta.params.model_id}")
-        ollama.pull(model.meta.params.model_id)
-        logging.info(f"✓ Done: {model.meta.params.model_id}")
-
-    logging.info("All model pulls finished.")
 
 
 def extract_final_answer(model: str, text: str) -> str:

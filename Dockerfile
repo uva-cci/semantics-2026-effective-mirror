@@ -36,5 +36,6 @@ RUN --mount=type=cache,target=$UV_CACHE_DIR \
     uv sync --frozen
 
 VOLUME /app/data
+VOLUME /root/.cache/huggingface
 
 ENTRYPOINT ["mirror"]

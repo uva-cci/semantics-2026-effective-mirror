@@ -1,5 +1,4 @@
 import argparse
-import asyncio as aio
 import json
 import logging
 import sys
@@ -7,11 +6,9 @@ from pathlib import Path
 
 from src.config import load_config
 from src.mirroring import MirroringPipeline, Scenario
-from src.utils.embeddings import download_encoders
-from src.utils.models import download_models
 
 
-async def _main() -> None:
+def _main() -> None:
     args = parse_args(sys.argv[1:])
 
     logging.basicConfig(
@@ -21,8 +18,6 @@ async def _main() -> None:
     )
 
     cfg = load_config(args.config)
-
-    await aio.gather(download_models(cfg), download_encoders(cfg))
 
     scenarios: list[Scenario] = []
     with open(cfg.scenarios, "r") as f:
@@ -64,7 +59,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def main() -> None:
-    aio.run(_main())
+    _main()
 
 
 if __name__ == "__main__":
