@@ -9,10 +9,14 @@ import backoff
 import ollama
 import openai
 from anthropic import AsyncAnthropic
+from anthropic.types.message_create_params import MessageCreateParamsNonStreaming
 from google import genai as google_genai
 from google.genai import errors as google_errors
 from google.genai import types as google_types
 from openai import AsyncOpenAI
+from openai.types.chat.completion_create_params import (
+    CompletionCreateParamsNonStreaming,
+)
 from pydantic import BaseModel
 from tqdm import tqdm
 
@@ -69,6 +73,7 @@ class InferenceOutput(BaseModel):
     text: str
     success: bool = True
     attempts: int = 1
+    errors: list[str] = []
 
 
 class InferenceModel(ABC):
@@ -171,7 +176,7 @@ class OllamaInferenceModel(InferenceModel):
         assert _ollama_async_client is not None
         # Ollama's option keys differ from ours in one place: `repeat_penalty`
         # is what Ollama calls our `repetition_penalty`.
-        options: dict[str, float | int] = {
+        raw_options: dict[str, float | int | None] = {
             "temperature": params.temperature,
             "top_p": params.top_p,
             "top_k": params.top_k,
@@ -179,8 +184,10 @@ class OllamaInferenceModel(InferenceModel):
             "repeat_penalty": params.repetition_penalty,
         }
         if params.min_p is not None:
-            options["min_p"] = params.min_p
-        options = {k: v for k, v in options.items() if v is not None}
+            raw_options["min_p"] = params.min_p
+        options: dict[str, float | int] = {
+            k: v for k, v in raw_options.items() if v is not None
+        }
 
         async with self._sem:
             res = await _ollama_async_client.generate(
@@ -230,7 +237,7 @@ class OpenAIInferenceModel(InferenceModel):
     async def generate(self, prompt: str, params: InferenceParams) -> InferenceOutput:
         # Build kwargs incrementally so axes the matrix did not sweep don't
         # show up in the request — the SDK rejects None for some of these.
-        kwargs: dict[str, object] = {
+        kwargs: CompletionCreateParamsNonStreaming = {
             "model": self.cfg.model_id,
             "messages": [{"role": "user", "content": prompt}],
         }
@@ -241,7 +248,13 @@ class OpenAIInferenceModel(InferenceModel):
         if params.seed is not None:
             kwargs["seed"] = params.seed
         if params.reasoning_effort is not None:
-            kwargs["reasoning_effort"] = params.reasoning_effort
+            # Our domain literal includes "xhigh" (a GPT-5-tier setting the
+            # SDK's literal hasn't caught up to yet); cast through to the
+            # SDK's narrower type.
+            kwargs["reasoning_effort"] = cast(
+                "Literal['minimal', 'low', 'medium', 'high']",
+                params.reasoning_effort,
+            )
         if params.text_verbosity is not None:
             kwargs["verbosity"] = params.text_verbosity
 
@@ -307,15 +320,19 @@ class AnthropicInferenceModel(InferenceModel):
             else self._OUTPUT_TOKEN_HEADROOM
         )
 
-        kwargs: dict[str, object] = {
+        kwargs: MessageCreateParamsNonStreaming = {
             "model": self.cfg.model_id,
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens": max_tokens,
-            "temperature": applied_temperature,
-            "top_p": params.top_p if params.top_p is not None else anthropic.omit,
-            "top_k": params.top_k if params.top_k else anthropic.omit,
         }
+        if applied_temperature is not None:
+            kwargs["temperature"] = applied_temperature
+        if params.top_p is not None:
+            kwargs["top_p"] = params.top_p
+        if params.top_k:
+            kwargs["top_k"] = params.top_k
         if thinking_on:
+            assert params.reasoning_budget is not None
             kwargs["thinking"] = {
                 "type": "enabled",
                 "budget_tokens": params.reasoning_budget,
@@ -378,21 +395,19 @@ class GoogleInferenceModel(InferenceModel):
 
     @override
     async def generate(self, prompt: str, params: InferenceParams) -> InferenceOutput:
-        config_kwargs: dict[str, object] = {
+        config: google_types.GenerateContentConfigDict = {
             "max_output_tokens": 32_000,
         }
         if params.temperature is not None:
-            config_kwargs["temperature"] = params.temperature
+            config["temperature"] = params.temperature
         if params.top_p is not None:
-            config_kwargs["top_p"] = params.top_p
+            config["top_p"] = params.top_p
         if params.top_k:
-            config_kwargs["top_k"] = params.top_k
+            config["top_k"] = params.top_k
         if params.seed is not None:
-            config_kwargs["seed"] = params.seed
+            config["seed"] = params.seed
         if params.reasoning_budget is not None:
-            config_kwargs["thinking_config"] = google_types.ThinkingConfig(
-                thinking_budget=params.reasoning_budget
-            )
+            config["thinking_config"] = {"thinking_budget": params.reasoning_budget}
 
         @backoff.on_exception(
             backoff.expo,
@@ -404,7 +419,7 @@ class GoogleInferenceModel(InferenceModel):
             return await google_client.aio.models.generate_content(
                 model=self.cfg.model_id,
                 contents=prompt,
-                config=google_types.GenerateContentConfig(**config_kwargs),
+                config=config,
             )
 
         async with self._sem:
