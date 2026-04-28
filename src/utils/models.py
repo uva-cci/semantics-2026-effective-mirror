@@ -9,6 +9,8 @@ import ollama
 import openai
 from anthropic import AsyncAnthropic
 from google import genai as google_genai
+from google.genai import errors as google_errors
+from google.genai import types as google_types
 from openai import AsyncOpenAI
 from pydantic import BaseModel
 from tqdm import tqdm
@@ -20,7 +22,6 @@ from src.config import (
     ModelConfig,
     OllamaLocalModelParams,
 )
-
 
 _semaphores: dict[str, asyncio.Semaphore] = {}
 
@@ -291,7 +292,40 @@ class GoogleInferenceModel(InferenceModel):
 
     @override
     async def generate(self, prompt: str, params: InferenceParams) -> InferenceOutput:
-        raise NotImplementedError()
+
+        @backoff.on_exception(
+            backoff.expo,
+            google_errors.APIError,
+            giveup=lambda e: getattr(e, "code", None) != 429,
+        )
+        async def create_completion():
+            assert google_client
+            return await google_client.aio.models.generate_content(
+                model=self.cfg.model_id,
+                contents=prompt,
+                config=google_types.GenerateContentConfig(
+                    temperature=params.temperature,
+                    top_p=params.top_p,
+                    top_k=params.top_k if params.top_k != 0 else None,
+                    max_output_tokens=32_000,  # might need to be changed
+                ),
+            )
+
+        async with self._sem:
+            result = await create_completion()
+
+        usage = result.usage_metadata
+        return InferenceOutput(
+            params=params,
+            text=result.text or "",
+            stats=InferenceStats(
+                completion_tokens=usage.candidates_token_count,
+                prompt_tokens=usage.prompt_token_count,
+                total_tokens=usage.total_token_count,
+            )
+            if usage
+            else InferenceStats(),
+        )
 
 
 def get_model(
@@ -338,4 +372,3 @@ def extract_gpt_oss(text: str) -> str:
     if index == -1:
         return ""
     return text[index + len(marker) :]
-
