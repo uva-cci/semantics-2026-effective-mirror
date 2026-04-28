@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from queue import Queue
-from typing import Any
+from typing import Any, Callable
 
 import jsonschema
 import jsonschema.exceptions
@@ -60,6 +60,7 @@ class MirroringPipelineOutput(BaseModel):
     symbolic_output1: InferenceOutput
     symbolic_output2: InferenceOutput
     natural_language: InferenceOutput
+    legenda: InferenceOutput
     # encoder -> score
     semantic_scores: dict[str, float]
     symbolic_equivalence: bool
@@ -88,12 +89,27 @@ class MirroringPipeline:
 
         self.tmpl_encode = self.tmpl_env.get_template("encode.jinja")
         self.tmpl_decode = self.tmpl_env.get_template("decode.jinja")
+        self.tmpl_legenda = self.tmpl_env.get_template("legenda.jinja")
 
         # DSL name -> raw JSON-schema text
         self.dsl_schemas: dict[str, str] = {}
         for dsl in cfg.dsl:
             with open(dsl.schema_path, "r") as f:
                 self.dsl_schemas[dsl.name] = f.read()
+
+        with open(cfg.legenda_schema, "r") as f:
+            self.legenda_schema_text: str = f.read()
+
+        # (scenario.id, model.name) -> cached legenda. Shared across all DSLs,
+        # ablations, and inference profiles for the pair: legenda content is
+        # DSL-agnostic, so regenerating per cell would only inject sampling
+        # noise without signal.
+        self.legendas: dict[tuple[str, str], InferenceOutput] = {}
+        # Per-key locks created lazily as keys appear at runtime; the guard
+        # serialises only the lock-creation step, not the LLM call itself, so
+        # different keys never block each other.
+        self.legenda_locks: dict[tuple[str, str], asyncio.Lock] = {}
+        self.legenda_locks_guard: asyncio.Lock = asyncio.Lock()
 
         self.encoders: dict[str, SentenceTransformer] = {}
         self.encoder_locks: dict[str, asyncio.Lock] = {}
@@ -195,14 +211,17 @@ class MirroringPipeline:
         params: InferenceParams,
     ) -> MirroringPipelineOutput:
 
+        legenda = await self.generate_legenda(scenario, model, params)
+
         symbolic_output1 = await self.generate_symbolic(
-            scenario.description, dsl, model, ablation, params)
+            scenario.description, dsl, model, ablation, params, legenda.text)
 
         decode_prompt = self.tmpl_decode.render({
             "dsl_input": symbolic_output1.text,
             "ablation": ablation.model_dump(),
             "dsl": dsl,
             "schema": self.dsl_schemas[dsl.name],
+            "legenda": legenda.text,
             "examples": [
                 # reverse input/output for decoding
                 FewShotExample(input=ex.output, output=ex.input)
@@ -215,7 +234,7 @@ class MirroringPipeline:
         logging.debug(f"output: {natural_language}")
 
         symbolic_output2 = await self.generate_symbolic(
-            natural_language.text, dsl, model, ablation, params)
+            natural_language.text, dsl, model, ablation, params, legenda.text)
 
         semantic_scores: dict[str, float] = {}
         for encoding, encoder in self.encoders.items():
@@ -234,6 +253,7 @@ class MirroringPipeline:
             symbolic_output1=symbolic_output1,
             symbolic_output2=symbolic_output2,
             natural_language=natural_language,
+            legenda=legenda,
             semantic_scores=semantic_scores,
             symbolic_equivalence=False  # TODO: run symbolic static analysis
         )
@@ -246,6 +266,45 @@ class MirroringPipeline:
         b = encoder.encode(b_text, convert_to_tensor=True, show_progress_bar=False)
         return a, b
 
+    async def _get_legenda_lock(self, key: tuple[str, str]) -> asyncio.Lock:
+        async with self.legenda_locks_guard:
+            if key not in self.legenda_locks:
+                self.legenda_locks[key] = asyncio.Lock()
+            return self.legenda_locks[key]
+
+    async def generate_legenda(
+        self,
+        scenario: Scenario,
+        model: InferenceModel,
+        params: InferenceParams,
+    ) -> InferenceOutput:
+        """Extract a DSL-agnostic vocabulary glossary for the scenario.
+
+        Always-on consistency baseline: every datapoint inherits the same
+        legenda for its (scenario, model) pair, so symbolic outputs share a
+        canonical naming for entities, actions, and durations rather than
+        re-inventing labels per cell. Cache key is `(scenario.id, model.name)`;
+        on miss, generates and validates against the legenda schema using the
+        same retry machinery as `generate_symbolic`.
+        """
+        key = (scenario.id, model.name)
+        lock = await self._get_legenda_lock(key)
+        async with lock:
+            if key in self.legendas:
+                return self.legendas[key]
+
+            def render(attempt: dict | None) -> str:
+                return self.tmpl_legenda.render({
+                    "scenario": scenario.description,
+                    "attempt": attempt,
+                })
+
+            output = await self._generate_validated(
+                render, self.legenda_schema_text, model, params,
+            )
+            self.legendas[key] = output
+            return output
+
     async def generate_symbolic(
         self,
         scenario: str,
@@ -253,45 +312,56 @@ class MirroringPipeline:
         model: InferenceModel,
         ablation: AblationFlags,
         params: InferenceParams,
+        legenda: str | None = None,
     ) -> InferenceOutput:
-        assert self.cfg.max_syntax_retries > 0
-
         schema_text = self.dsl_schemas[dsl.name]
+        examples = self.examples[dsl.name]
 
-        encode_prompt = self.tmpl_encode.render({
-            "scenario": scenario,
-            "ablation": ablation.model_dump(),
-            "dsl": dsl,
-            "schema": schema_text,
-            "examples": self.examples[dsl.name],
-            "attempt": None
-        })
-
-        logging.debug(encode_prompt)
-
-        ok = False
-        err = ""
-        output = await model.generate(encode_prompt, params)
-        for i in range(self.cfg.max_syntax_retries):
-            ok, err = self.validate_json(output.text, dsl.name)
-            if ok:
-                break
-
-            encode_prompt = self.tmpl_encode.render({
+        def render(attempt: dict | None) -> str:
+            return self.tmpl_encode.render({
                 "scenario": scenario,
                 "ablation": ablation.model_dump(),
                 "dsl": dsl,
                 "schema": schema_text,
-                "examples": self.examples[dsl.name],
-                "attempt": {
-                    "previous": output.text,
-                    "error": err
-                }
+                "examples": examples,
+                "legenda": legenda,
+                "attempt": attempt,
             })
 
-            logging.debug(encode_prompt)
+        return await self._generate_validated(render, schema_text, model, params)
 
-            output = await model.generate(encode_prompt, params)
+    async def _generate_validated(
+        self,
+        render_prompt: Callable[[dict | None], str],
+        schema_text: str,
+        model: InferenceModel,
+        params: InferenceParams,
+    ) -> InferenceOutput:
+        """Render → generate → validate-against-schema → retry on failure.
+
+        `render_prompt(attempt)` is called once with `None` for the initial
+        prompt and then again with `{"previous": ..., "error": ...}` for each
+        retry, so the caller's template can include attempt feedback. The same
+        retry budget (`cfg.max_syntax_retries`) and rich validator-error format
+        applied to the original encode loop is shared by every consumer.
+        """
+        assert self.cfg.max_syntax_retries > 0
+
+        prompt = render_prompt(None)
+        logging.debug(prompt)
+
+        ok = False
+        err = ""
+        output = await model.generate(prompt, params)
+        for i in range(self.cfg.max_syntax_retries):
+            ok, err = self.validate_json(output.text, schema_text)
+            if ok:
+                break
+
+            prompt = render_prompt({"previous": output.text, "error": err})
+            logging.debug(prompt)
+
+            output = await model.generate(prompt, params)
             output.attempts = i + 1
 
             logging.debug(f"output: {output}")
@@ -299,8 +369,8 @@ class MirroringPipeline:
         output.success = ok
         return output
 
-    def validate_json(self, s: str, dsl: str) -> tuple[bool, str]:
-        """Validate `s` against the DSL's JSON schema.
+    def validate_json(self, s: str, schema_text: str) -> tuple[bool, str]:
+        """Validate `s` against `schema_text` (a raw JSON-schema document).
 
         Returns `(ok, err)`. The error message is engineered for the LLM
         self-refinement loop: it (1) names the failure mode (parse vs schema),
@@ -310,7 +380,7 @@ class MirroringPipeline:
         re-emit the same mistake or "fix" the wrong layer (e.g. retype a
         well-formed value when the actual problem was a missing required key).
         """
-        schema = json.loads(self.dsl_schemas[dsl])
+        schema = json.loads(schema_text)
         try:
             instance = json.loads(s)
         except json.JSONDecodeError as e:

@@ -1,5 +1,7 @@
 scenarios: data/scenarios.json
 
+legenda_schema: data/dsl/legenda.schema.json
+
 max_syntax_retries: 3
 
 dsl:

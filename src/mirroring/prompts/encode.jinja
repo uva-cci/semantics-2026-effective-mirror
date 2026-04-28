@@ -10,6 +10,14 @@ Your task is to transform the following normative scenario into a precise specif
 {{ schema }}
 {% endif %}
 
+{% if legenda %}
+## Vocabulary (use these labels consistently)
+
+The following canonical labels were extracted for this scenario. When the schema lets you choose identifier-like values (variable names, IDs, action names, role names), prefer the labels below. Do not invent new labels for concepts already listed.
+
+{{ legenda }}
+{% endif %}
+
 ## Input Scenario
 
 {{ scenario }}

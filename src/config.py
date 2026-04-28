@@ -116,6 +116,7 @@ class InferenceParamsConfig(BaseModel):
 
 class Config(BaseModel):
     scenarios: pathlib.Path
+    legenda_schema: FilePath
     dsl: list[DSLConfig]
     models: list[ModelConfig]
     encodings: list[EmbeddingModelConfig]

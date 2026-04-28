@@ -1,0 +1,52 @@
+scenarios: data/scenarios.smoke.json
+
+legenda_schema: data/dsl/legenda.schema.json
+
+max_syntax_retries: 2
+
+output: output-smoke.ndjson
+
+dsl:
+  - name: dcpl
+    examples: data/dsl/dcpl/examples.json
+    schema: data/dsl/dcpl/schema.json
+
+models:
+  - name: gemma4-e4b
+    meta:
+      kind: local
+      params:
+        driver: ollama
+        model_id: gemma4:e4b
+
+encodings:
+  - name: pplx-embed-v1-0.6b
+    org: perplexity-ai
+
+inference:
+  concurrency:
+    ollama: 1
+    openai: 8
+    anthropic: 4
+    google: 4
+
+  constants:
+    seed: 42
+    top_k: 0
+    repetition_penalty: 1.1
+
+  defaults:
+    temperature: [0.0]
+    top_p: [1.0]
+
+  per_backend:
+    ollama:
+      truncation:
+        - { name: "top_p_baseline", top_p: 1.0, min_p: null }
+    openai:
+      reasoning_effort: ["low"]
+      text_verbosity: ["low"]
+    anthropic:
+      reasoning_budget: [1024]
+    google:
+      reasoning_budget: [1024]

@@ -12,6 +12,14 @@ Your objective is to express the scenario described by the DSL without any refer
 {{ schema }}
 {% endif %}
 
+{% if legenda %}
+## Vocabulary (shorthand glossary used in the input)
+
+The labels listed below were used in the DSL specification as shorthand for natural-language concepts. Expand them back into natural language in your description. Do not mention the labels themselves.
+
+{{ legenda }}
+{% endif %}
+
 ## DSL Input (the specification to be described)
 ```json
 {{ dsl_input }}

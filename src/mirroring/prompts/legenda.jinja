@@ -1,0 +1,33 @@
+## Instruction
+You are a vocabulary-extraction specialist. Read the scenario below and produce a compact glossary that maps its salient concepts to short canonical labels. Downstream tooling will reuse these labels verbatim across multiple formal-language pipelines, so they must be stable, mnemonic, and identifier-shaped.
+
+## Input Scenario
+
+{{ scenario }}
+
+## Output Requirements
+1. **Format** - Emit a single JSON document: an object with an `entries` array of items, each item an object `{term, label, kind}` (with optional `notes`).
+2. **Coverage** - Include every distinct entity, action, duration, predicate, or attribute mentioned in the scenario. Do not invent concepts that are absent from the scenario text.
+3. **`term`** - The natural-language phrase as it appears in the scenario (or a close paraphrase if the scenario uses several wordings for the same concept).
+4. **`label`** - Must match `^[A-Za-z][A-Za-z0-9]{0,31}$` — letters and digits only, must start with a letter. **No** underscores, hyphens, dots, colons, or any other punctuation. This keeps labels portable across formal languages that disagree on identifier punctuation. Suggested conventions: `lowerCamel` for entities and actions (e.g. `dataSubject`, `transferData`), `UpperCamel` for types (e.g. `PersonalData`), and a trailing-token style for durations (e.g. `dur30D`, `month1`).
+5. **`kind`** - Exactly one of: `actor`, `resource`, `action`, `duration`, `predicate`, `attribute`, `other`.
+6. **`notes`** *(optional)* - A short clarifying gloss when the term-to-label mapping is non-obvious.
+7. **No extra text** - Do not add comments, explanations, or surrounding code fences. The output must parse as a single JSON document.
+
+{% if attempt %}
+## Your previous attempt was rejected by the JSON-schema validator
+
+Previous output:
+
+{{ attempt.previous }}
+
+Validator feedback:
+
+{{ attempt.error }}
+
+Produce a corrected JSON glossary that addresses the feedback above.
+{% endif %}
+
+## Final Output
+Respond **only** with the JSON glossary.
+Do **not** add any surrounding Markdown, code fences, or explanatory text.
