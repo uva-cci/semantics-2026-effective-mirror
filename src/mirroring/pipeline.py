@@ -1,3 +1,4 @@
+import asyncio
 import itertools
 import json
 import logging
@@ -90,10 +91,17 @@ class MirroringPipeline:
                 self.dsl_schemas[dsl.name] = f.read()
 
         self.encoders: dict[str, SentenceTransformer] = {}
+        self.encoder_locks: dict[str, asyncio.Lock] = {}
         for encoding in self.cfg.encodings:
             self.encoders[encoding.name] = get_encoder(encoding)
+            # Per-encoder lock prevents concurrent .encode() calls on the same
+            # SentenceTransformer instance — not safe under GPU contention.
+            self.encoder_locks[encoding.name] = asyncio.Lock()
 
     def run(self) -> None:
+        asyncio.run(self._run_async())
+
+    async def _run_async(self) -> None:
         logging.info(f"Pipeline {self.__class__.__name__} started")
 
         if self.cfg.output is not None:
@@ -116,41 +124,52 @@ class MirroringPipeline:
             self.cfg.inference.top_k,
         ))
 
+        ablations = [
+            AblationFlags(syntax=False, few_shot=False),
+            AblationFlags(syntax=True, few_shot=False),
+            AblationFlags(syntax=False, few_shot=True),
+            AblationFlags(syntax=True, few_shot=True),
+        ]
+
         for model_cfg in self.cfg.models:
             logging.info(f"- Model: {model_cfg.name}")
-            model = get_model(model_cfg)
-            for scenario in self.scenarios:
-                logging.info(f"Running scenario: {scenario.id}")
-                for dsl in self.cfg.dsl:
-                    logging.info(f"- DSL: {dsl.name}")
-                    for abl in [
-                        AblationFlags(syntax=False, few_shot=False),
-                        AblationFlags(syntax=True, few_shot=False),
-                        AblationFlags(syntax=False, few_shot=True),
-                        AblationFlags(syntax=True, few_shot=True),
-                    ]:
-                        logging.info(f"- Syntax: {abl.syntax}")
-                        logging.info(f"- Few-shot: {abl.few_shot}")
+            model = get_model(model_cfg, self.cfg.inference.concurrency)
 
-                        for temp, top_p, top_k in inference_profiles:
-                            params = InferenceParams(
-                                temperature=temp,
-                                top_p=top_p,
-                                top_k=top_k
-                            )
-                            logging.info(f"- Params: {params}")
+            tasks = [
+                self._run_task(scenario, dsl, model, abl, InferenceParams(
+                    temperature=temp, top_p=top_p, top_k=top_k))
+                for scenario in self.scenarios
+                for dsl in self.cfg.dsl
+                for abl in ablations
+                for (temp, top_p, top_k) in inference_profiles
+            ]
 
-                            self.output.put(
-                                self.produce_datapoint(
-                                    scenario, dsl, model, abl, params)
-                            )
-
-                        logging.info("✓ Done")
+            logging.info(f"Dispatching {len(tasks)} datapoint(s) for {model.name}")
+            await asyncio.gather(*tasks)
+            logging.info(f"✓ Done with {model.name}")
 
         self.output.put(None)   # tell the writer to finish
         t.join()
 
         logging.info(f"Pipeline {self.__class__.__name__} completed")
+
+    async def _run_task(
+        self,
+        scenario: "Scenario",
+        dsl: DSLConfig,
+        model: InferenceModel,
+        ablation: AblationFlags,
+        params: InferenceParams,
+    ) -> None:
+        dp = await self.produce_datapoint(scenario, dsl, model, ablation, params)
+        # Queue.put is thread-safe and non-blocking on an unbounded queue, so it
+        # is safe to call directly from the event loop. The writer thread is the
+        # sole consumer, which serialises file writes.
+        self.output.put(dp)
+        logging.info(
+            f"  ✓ {model.name} | scenario={scenario.id} dsl={dsl.name} "
+            f"syntax={ablation.syntax} few_shot={ablation.few_shot}"
+        )
 
     def writer_worker(self, fp: Path):
         logging.info(f"Writer worker for {self.__class__.__name__} started")
@@ -166,7 +185,7 @@ class MirroringPipeline:
 
         logging.info(f"Writer worker for {self.__class__.__name__} closed")
 
-    def produce_datapoint(
+    async def produce_datapoint(
         self,
         scenario: Scenario,
         dsl: DSLConfig,
@@ -175,7 +194,7 @@ class MirroringPipeline:
         params: InferenceParams,
     ) -> MirroringPipelineOutput:
 
-        symbolic_output1 = self.generate_symbolic(
+        symbolic_output1 = await self.generate_symbolic(
             scenario.description, dsl, model, ablation, params)
 
         decode_prompt = self.tmpl_decode.render({
@@ -191,18 +210,19 @@ class MirroringPipeline:
         })
 
         logging.debug(decode_prompt)
-        natural_language = model.generate(decode_prompt, params)
+        natural_language = await model.generate(decode_prompt, params)
         logging.debug(f"output: {natural_language}")
 
-        symbolic_output2 = self.generate_symbolic(
+        symbolic_output2 = await self.generate_symbolic(
             natural_language.text, dsl, model, ablation, params)
 
         semantic_scores: dict[str, float] = {}
         for encoding, encoder in self.encoders.items():
-            a: torch.Tensor = encoder.encode(
-                scenario.description, convert_to_tensor=True, show_progress_bar=False)
-            b: torch.Tensor = encoder.encode(
-                natural_language.text, convert_to_tensor=True, show_progress_bar=False)
+            async with self.encoder_locks[encoding]:
+                a, b = await asyncio.to_thread(
+                    self._encode_pair,
+                    encoder, scenario.description, natural_language.text,
+                )
             semantic_scores[encoding] = score_vectors(a, b)
 
         return MirroringPipelineOutput(
@@ -217,7 +237,15 @@ class MirroringPipeline:
             symbolic_equivalence=False  # TODO: run symbolic static analysis
         )
 
-    def generate_symbolic(
+    @staticmethod
+    def _encode_pair(
+        encoder: SentenceTransformer, a_text: str, b_text: str,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        a = encoder.encode(a_text, convert_to_tensor=True, show_progress_bar=False)
+        b = encoder.encode(b_text, convert_to_tensor=True, show_progress_bar=False)
+        return a, b
+
+    async def generate_symbolic(
         self,
         scenario: str,
         dsl: DSLConfig,
@@ -242,7 +270,7 @@ class MirroringPipeline:
 
         ok = False
         err = ""
-        output = model.generate(encode_prompt, params)
+        output = await model.generate(encode_prompt, params)
         for i in range(self.cfg.max_syntax_retries):
             ok, err = self.validate_json(output.text, dsl.name)
             if ok:
@@ -262,7 +290,7 @@ class MirroringPipeline:
 
             logging.debug(encode_prompt)
 
-            output = model.generate(encode_prompt, params)
+            output = await model.generate(encode_prompt, params)
             output.attempts = i + 1
 
             logging.debug(f"output: {output}")

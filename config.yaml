@@ -12,63 +12,77 @@ dsl:
     schema: data/dsl/odrl/schema.json
 
 models:
-  - name: llama3.2
+  # --- LOCAL MODELS (OLLAMA) ---
+  - name: llama4-scout
     meta:
       kind: local
       params:
         driver: ollama
-        model_id: llama3.2
+        model_id: llama4:17b-scout
 
-  - name: gpt-oss
+  - name: llama4-maverick
     meta:
       kind: local
       params:
         driver: ollama
-        model_id: gpt-oss:20b
+        model_id: llama4:17b-maverick
 
-  - name: qwen3
+  - name: qwen3.6-moe
     meta:
       kind: local
       params:
         driver: ollama
-        model_id: qwen3:8b
+        model_id: qwen3.6:35b-a3b
 
-  - name: gemma3.1
+  - name: gemma4-e4b
     meta:
       kind: local
       params:
         driver: ollama
-        model_id: gemma3:4b
+        model_id: gemma4:e4b
 
-  - name: gpt-5
+  # --- CLOUD MODELS ---
+  - name: gpt-5.5-pro
     meta:
       kind: cloud
       provider: openai
-      model_id: gpt-5-2025-08-07
+      model_id: gpt-5.5-2026-04-23
 
-  - name: gpt-4.1
+  - name: gpt-5.5-thinking
     meta:
       kind: cloud
       provider: openai
-      model_id: gpt-4.1-2025-04-14
+      model_id: gpt-5.5-thinking-preview
 
-  - name: claude-sonnet-4.5
+  - name: claude-opus-4.7
     meta:
       kind: cloud
       provider: anthropic
-      model_id: claude-sonnet-4-5-20250929
+      model_id: claude-opus-4-7-20260416
 
-  - name: claude-haiku-4.5
+  - name: claude-mythos-preview
     meta:
       kind: cloud
       provider: anthropic
-      model_id: claude-haiku-4-5-20251001
+      model_id: claude-mythos-20260406
 
-  - name: claude-opus-4.1
+  - name: gpt-5.5-flash
     meta:
       kind: cloud
-      provider: anthropic
-      model_id: claude-opus-4-1-20250805
+      provider: openai
+      model_id: gpt-5.5-flash-2026-04-23
+
+  - name: gemini-3.1-pro
+    meta:
+      kind: cloud
+      provider: google
+      model_id: gemini-3.1-pro-preview
+
+  - name: gemini-3-flash
+    meta:
+      kind: cloud
+      provider: google
+      model_id: gemini-3-flash-preview
 
 encodings:
   - name: pplx-embed-v1-0.6b
@@ -78,3 +92,8 @@ inference:
   temperature: [0.0, 0.2, 0.5, 0.8, 1.0]
   top_p: [0.8, 0.9, 0.95, 0.99]
   top_k: [40, 80, 200, 0]
+  concurrency:
+    ollama: 1
+    openai: 8
+    anthropic: 4
+    google: 4

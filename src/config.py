@@ -26,6 +26,7 @@ class LocalModelConfig(BaseModel):
 class CloudProvider(StrEnum):
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
+    GOOGLE = "google"
 
 
 class CloudModelConfig(BaseModel):
@@ -45,10 +46,19 @@ class EmbeddingModelConfig(BaseModel):
     org: str
 
 
+class InferenceConcurrencyConfig(BaseModel):
+    ollama: int = 1
+    openai: int = 8
+    anthropic: int = 4
+    google: int = 4
+
+
 class InferenceParamsConfig(BaseModel):
     temperature: list[float]
     top_p: list[float]
     top_k: list[int]
+    concurrency: InferenceConcurrencyConfig = Field(
+        default_factory=InferenceConcurrencyConfig)
 
 
 class Config(BaseModel):
