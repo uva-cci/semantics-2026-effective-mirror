@@ -1,5 +1,4 @@
 import asyncio as aio
-import ctypes
 import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -13,7 +12,6 @@ import ollama
 import openai
 from anthropic import Anthropic
 from google import genai as google_genai
-from llama_cpp import CreateCompletionResponse, Llama, llama_log_set
 from openai import OpenAI
 from pydantic import BaseModel
 from tqdm import tqdm
@@ -21,7 +19,6 @@ from tqdm import tqdm
 from src.config import (
     CloudModelConfig,
     Config,
-    LlamaCppLocalModelParams,
     LocalModelConfig,
     ModelConfig,
     OllamaLocalModelParams,
@@ -57,11 +54,7 @@ class InferenceModel(ABC):
         self.name = name
 
     @abstractmethod
-    def generate(
-        self,
-        prompt: str,
-        params: InferenceParams
-    ) -> InferenceOutput:
+    def generate(self, prompt: str, params: InferenceParams) -> InferenceOutput:
         """
         Return a single generated text for the given prompt.
 
@@ -80,66 +73,6 @@ class InferenceModel(ABC):
         ...
 
 
-# suppress ggml logs
-def suppress_log_callback(level: int, message: str, user_data: Any):
-    pass
-
-
-log_callback = ctypes.CFUNCTYPE(
-    None, ctypes.c_int, ctypes.c_char_p, ctypes.c_void_p)(suppress_log_callback)
-llama_log_set(log_callback, ctypes.c_void_p())
-
-
-class LlamaCppInferenceModel(InferenceModel):
-    """
-    Local inference using a compiled llama.cpp model.
-    """
-
-    def __init__(self, name: str, cfg: LlamaCppLocalModelParams, verbose: bool = False) -> None:
-        super().__init__(name)
-
-        self.path = get_model_path(name)
-        self.model = Llama(
-            model_path=str(self.path),
-            n_batch=cfg.n_batch,
-            n_ubatch=cfg.n_ubatch,
-            verbose=verbose,
-            flash_attn=True,
-            n_gpu_layers=-1,  # offload all layers to GPU
-            n_ctx=0,  # use model default context size
-        )
-
-    @override
-    def generate(
-        self,
-        prompt: str,
-        params: InferenceParams
-    ) -> InferenceOutput:
-        result = cast(CreateCompletionResponse, self.model(
-            prompt,
-            temperature=params.temperature,
-            top_p=params.top_p,
-            top_k=params.top_k,
-            max_tokens=None,
-        ))
-
-        stats = result.get("usage", {
-            "completion_tokens": -1,
-            "prompt_tokens": -1,
-            "total_tokens": -1
-        })
-
-        return InferenceOutput(
-            params=params,
-            text=extract_final_answer(self.name, result["choices"][0]["text"]),
-            stats=InferenceStats(
-                completion_tokens=stats["completion_tokens"],
-                prompt_tokens=stats["prompt_tokens"],
-                total_tokens=stats["total_tokens"],
-            )
-        )
-
-
 class OllamaInferenceModel(InferenceModel):
     """
     Local inference using Ollama.
@@ -150,19 +83,16 @@ class OllamaInferenceModel(InferenceModel):
         self.cfg = cfg
 
     @override
-    def generate(
-        self,
-        prompt: str,
-        params: InferenceParams
-    ) -> InferenceOutput:
+    def generate(self, prompt: str, params: InferenceParams) -> InferenceOutput:
         res = ollama.generate(
             prompt=prompt,
             model=self.cfg.model_id,
             options={
                 "temperature": params.temperature,
                 "top_p": params.top_p,
-                "top_k": params.top_k
-            })
+                "top_k": params.top_k,
+            },
+        )
 
         completion_tokens = res.eval_count or -1
         prompt_tokens = res.prompt_eval_count or -1
@@ -174,7 +104,7 @@ class OllamaInferenceModel(InferenceModel):
                 completion_tokens=completion_tokens,
                 prompt_tokens=prompt_tokens,
                 total_tokens=completion_tokens + prompt_tokens,
-            )
+            ),
         )
 
 
@@ -195,11 +125,7 @@ class OpenAIInferenceModel(InferenceModel):
 
         self.cfg = cfg
 
-    def generate(
-        self,
-        prompt: str,
-        params: InferenceParams
-    ) -> InferenceOutput:
+    def generate(self, prompt: str, params: InferenceParams) -> InferenceOutput:
 
         @backoff.on_exception(backoff.expo, openai.RateLimitError)
         def create_completion():
@@ -207,20 +133,23 @@ class OpenAIInferenceModel(InferenceModel):
             return openai_client.chat.completions.create(
                 model=self.cfg.model_id,
                 messages=[{"role": "user", "content": prompt}],
-                temperature=params.temperature
+                temperature=params.temperature,
             )
 
         result = create_completion()
 
         return InferenceOutput(
             params=InferenceParams(
-                temperature=params.temperature, top_p=1.0, top_k=0),  # top_k/top_n not supported
+                temperature=params.temperature, top_p=1.0, top_k=0
+            ),  # top_k/top_n not supported
             text=result.choices[0].message.content or "",
             stats=InferenceStats(
                 completion_tokens=result.usage.completion_tokens,
                 prompt_tokens=result.usage.prompt_tokens,
                 total_tokens=result.usage.total_tokens,
-            ) if result.usage else InferenceStats()
+            )
+            if result.usage
+            else InferenceStats(),
         )
 
 
@@ -241,11 +170,7 @@ class AnthropicInferenceModel(InferenceModel):
 
         self.cfg = cfg
 
-    def generate(
-        self,
-        prompt: str,
-        params: InferenceParams
-    ) -> InferenceOutput:
+    def generate(self, prompt: str, params: InferenceParams) -> InferenceOutput:
 
         @backoff.on_exception(backoff.expo, anthropic.RateLimitError)
         def create_completion():
@@ -268,7 +193,9 @@ class AnthropicInferenceModel(InferenceModel):
                 completion_tokens=result.usage.output_tokens,
                 prompt_tokens=result.usage.input_tokens,
                 total_tokens=result.usage.input_tokens + result.usage.output_tokens,
-            ) if result.usage else InferenceStats()
+            )
+            if result.usage
+            else InferenceStats(),
         )
 
 
@@ -289,11 +216,7 @@ class GoogleInferenceModel(InferenceModel):
 
         self.cfg = cfg
 
-    def generate(
-        self,
-        prompt: str,
-        params: InferenceParams
-    ) -> InferenceOutput:
+    def generate(self, prompt: str, params: InferenceParams) -> InferenceOutput:
         raise NotImplementedError()
 
 
@@ -312,13 +235,8 @@ def get_model(cfg: ModelConfig) -> InferenceModel:
         case "local":
             local_meta = cast(LocalModelConfig, cfg.meta)
             match local_meta.params.driver:
-                case "llama_cpp":
-                    llama_cpp_params = cast(
-                        LlamaCppLocalModelParams, local_meta.params)
-                    return LlamaCppInferenceModel(cfg.name, llama_cpp_params)
                 case "ollama":
-                    ollama_params = cast(
-                        OllamaLocalModelParams, local_meta.params)
+                    ollama_params = cast(OllamaLocalModelParams, local_meta.params)
                     return OllamaInferenceModel(cfg.name, ollama_params)
         case "cloud":
             cloud_meta = cast(CloudModelConfig, cfg.meta)
@@ -362,7 +280,7 @@ async def download_gguf(url: str, dest: Path, chunk_size: int = 64 * 1024) -> No
                     unit_divisor=1024,
                     desc=dest.name,
                     dynamic_ncols=True,  # auto‑adjust width
-                    colour="cyan"
+                    colour="cyan",
                 ) as pbar:
                     async with aiofiles.open(dest, mode="wb") as fp:
                         async for chunk in resp.content.iter_chunked(chunk_size):
@@ -397,8 +315,7 @@ async def download_models(cfg: Config) -> None:
 
         assert model.meta.params.url, "llama_cpp driver requires url"
         dest = get_model_path(model.name)
-        tasks.append(download_gguf(
-            model.meta.params.url.encoded_string(), dest))
+        tasks.append(download_gguf(model.meta.params.url.encoded_string(), dest))
 
     await aio.gather(*tasks)
 
@@ -416,4 +333,4 @@ def extract_gpt_oss(text: str) -> str:
     index = text.find(marker)
     if index == -1:
         return ""
-    return text[index + len(marker):]
+    return text[index + len(marker) :]

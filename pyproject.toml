@@ -1,7 +1,7 @@
 [project]
-name = "nll2fr-2025-neurosymbolic"
+name = "semantics-2026-mirror"
 version = "0.1.0"
-description = "A reproduction package for the relative workshop paper."
+description = "Reproduction package for the SEMANTICS 2026 submission on neurosymbolic mirroring of normative specifications."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -23,6 +23,9 @@ dependencies = [
     "tqdm>=4.67.1",
 ]
 
+[project.scripts]
+mirror = "main:main"
+
 [dependency-groups]
 dev = [
     "types-aiofiles>=25.1.0.20251011",
@@ -32,14 +35,10 @@ dev = [
 ]
 
 
-[tool.uv]
-required-environments = [
-    "sys_platform == 'darwin' and platform_machine == 'arm64'",
-]
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[tool.uv.sources]
-llama-cpp-python = { index = "abetlen" }
-
-[[tool.uv.index]]
-name = "abetlen"
-url = "https://abetlen.github.io/llama-cpp-python/whl/metal"
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+force-include = { "main.py" = "main.py" }

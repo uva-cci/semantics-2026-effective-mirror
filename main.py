@@ -45,7 +45,7 @@ async def _main() -> None:
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        prog="nll2fr-pipeline",
+        prog="mirror",
         description="Testing normative specification languages.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )

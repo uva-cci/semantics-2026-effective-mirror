@@ -4,6 +4,7 @@ FROM python:3.13-slim
 ENV UV_COMPILE_BYTECODE=1
 ENV UV_LINK_MODE=copy
 ENV UV_CACHE_DIR=.cache/uv
+ENV PATH="/app/.venv/bin:$PATH"
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -36,4 +37,4 @@ RUN --mount=type=cache,target=$UV_CACHE_DIR \
 
 VOLUME /app/data
 
-ENTRYPOINT ["uv", "run", "main.py"]
+ENTRYPOINT ["mirror"]
