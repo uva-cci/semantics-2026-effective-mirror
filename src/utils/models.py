@@ -1,11 +1,7 @@
-import asyncio as aio
 import logging
 from abc import ABC, abstractmethod
-from pathlib import Path
-from typing import Any, Awaitable, cast, override
+from typing import cast, override
 
-import aiofiles
-import aiohttp
 import anthropic
 import backoff
 import ollama
@@ -14,7 +10,6 @@ from anthropic import Anthropic
 from google import genai as google_genai
 from openai import OpenAI
 from pydantic import BaseModel
-from tqdm import tqdm
 
 from src.config import (
     CloudModelConfig,
@@ -234,10 +229,7 @@ def get_model(cfg: ModelConfig) -> InferenceModel:
     match cfg.meta.kind:
         case "local":
             local_meta = cast(LocalModelConfig, cfg.meta)
-            match local_meta.params.driver:
-                case "ollama":
-                    ollama_params = cast(OllamaLocalModelParams, local_meta.params)
-                    return OllamaInferenceModel(cfg.name, ollama_params)
+            return OllamaInferenceModel(cfg.name, local_meta.params)
         case "cloud":
             cloud_meta = cast(CloudModelConfig, cfg.meta)
             match cloud_meta.provider:
@@ -250,76 +242,22 @@ def get_model(cfg: ModelConfig) -> InferenceModel:
     raise ValueError()
 
 
-def get_model_path(name: str) -> Path:
-    return Path("data/models") / f"{name}.gguf"
-
-
-async def download_gguf(url: str, dest: Path, chunk_size: int = 64 * 1024) -> None:
-    dest.parent.mkdir(parents=True, exist_ok=True)
-
-    if dest.exists():
-        logging.info(f"✓ Skipping existing file: {dest}")
-        return
-
-    logging.info(f"Downloading {url} → {dest}")
-
-    try:
-        async with aiohttp.ClientSession(
-            # downloads are several GBs large and take time
-            timeout=aiohttp.ClientTimeout(total=None, sock_read=30)
-        ) as session:
-            async with session.get(url) as resp:
-                resp.raise_for_status()
-
-                total = int(resp.headers.get("Content-Length") or 0)
-
-                with tqdm(
-                    total=total,
-                    unit="B",
-                    unit_scale=True,  # e.g. 1.5 MiB instead of 1572864 B
-                    unit_divisor=1024,
-                    desc=dest.name,
-                    dynamic_ncols=True,  # auto‑adjust width
-                    colour="cyan",
-                ) as pbar:
-                    async with aiofiles.open(dest, mode="wb") as fp:
-                        async for chunk in resp.content.iter_chunked(chunk_size):
-                            await fp.write(chunk)
-                            pbar.update(len(chunk))
-
-    except Exception as e:
-        # we don't want partial downloads to be interpreted as completed
-        dest.unlink()
-        raise e
-
-    logging.info(f"✓ Done: {dest}")
-
-
 async def download_models(cfg: Config) -> None:
-    logging.info("Downloading GGUF models.")
+    logging.info("Pulling Ollama models.")
 
-    tasks: list[Awaitable[Any]] = []
     for model in cfg.models:
-        logging.info(f"Downloading model: {model.name}")
+        logging.info(f"Pulling model: {model.name}")
 
         if model.meta.kind != "local":
             logging.warning(f"Skipping cloud model entry: {model.name}")
             continue
 
-        if model.meta.params.driver == "ollama":
-            assert model.meta.params.model_id, "ollama driver requires model_id"
-            logging.info(f"Downloading ollama: {model.meta.params.model_id}")
-            ollama.pull(model.meta.params.model_id)
-            logging.info(f"✓ Done: {model.meta.params.model_id}")
-            continue
+        assert model.meta.params.model_id, "ollama driver requires model_id"
+        logging.info(f"Pulling ollama: {model.meta.params.model_id}")
+        ollama.pull(model.meta.params.model_id)
+        logging.info(f"✓ Done: {model.meta.params.model_id}")
 
-        assert model.meta.params.url, "llama_cpp driver requires url"
-        dest = get_model_path(model.name)
-        tasks.append(download_gguf(model.meta.params.url.encoded_string(), dest))
-
-    await aio.gather(*tasks)
-
-    logging.info("All models downloads finished.")
+    logging.info("All model pulls finished.")
 
 
 def extract_final_answer(model: str, text: str) -> str:
@@ -334,3 +272,4 @@ def extract_gpt_oss(text: str) -> str:
     if index == -1:
         return ""
     return text[index + len(marker) :]
+

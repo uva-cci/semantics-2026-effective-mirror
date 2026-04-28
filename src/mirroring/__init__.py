@@ -1,3 +1,3 @@
-from .pipeline import MirroringPipeline
+from .pipeline import MirroringPipeline, Scenario
 
-__all__ = ["MirroringPipeline"]
+__all__ = ["MirroringPipeline", "Scenario"]

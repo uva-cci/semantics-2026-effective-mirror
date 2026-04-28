@@ -6,10 +6,9 @@ import sys
 from pathlib import Path
 
 from src.config import load_config
-from src.embeddings import download_encoders
-from src.mirroring import MirroringPipeline
-from src.models import download_models
-from src.pipeline import Scenario
+from src.mirroring import MirroringPipeline, Scenario
+from src.utils.embeddings import download_encoders
+from src.utils.models import download_models
 
 
 async def _main() -> None:
@@ -31,16 +30,8 @@ async def _main() -> None:
         for scenario in raw:
             scenarios.append(Scenario(**scenario))
 
-    for name in cfg.pipelines:
-        logging.info(f"Starting experiment pipeline: {name}")
-
-        match name:
-            case "mirroring":
-                MirroringPipeline(cfg, scenarios).run()
-            case _:
-                logging.error(f"Unimplemented pipeline type {name}")
-
-        logging.info("Experiment completed")
+    MirroringPipeline(cfg, scenarios).run()
+    logging.info("Experiment completed")
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

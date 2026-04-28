@@ -30,7 +30,7 @@ Local Ollama models require `ollama serve` running on the host. By default the O
 
 ### Docker Execution
 
-The [`Dockerfile`](./Dockerfile) builds an image whose entrypoint is the `mirror` CLI. To avoid bloating the image with model and encoder binaries (e.g. GGUF files), the container expects `/app/data` to be mounted as a volume. Reuse that volume across invocations.
+The [`Dockerfile`](./Dockerfile) builds an image whose entrypoint is the `mirror` CLI. To avoid bloating the image with encoder binaries, the container expects `/app/data` to be mounted as a volume. Reuse that volume across invocations.
 
 ```sh
 docker build -t semantics-2026-mirror .

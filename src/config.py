@@ -4,12 +4,7 @@ from enum import StrEnum
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, Field, FilePath, HttpUrl
-
-
-class PipelineName(StrEnum):
-    MIRRORING = "mirroring"
-    REASONING = "reasoning"
+from pydantic import BaseModel, Field, FilePath
 
 
 class ValidationFormat(StrEnum):
@@ -33,18 +28,9 @@ class OllamaLocalModelParams(BaseModel):
     model_id: str
 
 
-class LlamaCppLocalModelParams(BaseModel):
-    driver: Literal['llama_cpp']
-    context_length: int
-    n_batch: int
-    n_ubatch: int
-    url: HttpUrl
-
-
 class LocalModelConfig(BaseModel):
     kind: Literal['local']
-    params: OllamaLocalModelParams | LlamaCppLocalModelParams = Field(
-        discriminator="driver")
+    params: OllamaLocalModelParams
 
 
 class CloudProvider(StrEnum):
@@ -76,13 +62,13 @@ class InferenceParamsConfig(BaseModel):
 
 
 class Config(BaseModel):
-    pipelines: list[PipelineName]
     scenarios: pathlib.Path
     dsl: list[DSLConfig]
     models: list[ModelConfig]
     encodings: list[EmbeddingModelConfig]
     inference: InferenceParamsConfig
     max_syntax_retries: int
+    output: pathlib.Path | None = None
 
 
 def load_config(path: pathlib.Path = pathlib.Path("config.yaml")) -> Config:
