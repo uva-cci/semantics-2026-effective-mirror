@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -29,6 +30,24 @@ from src.utils.models import (
 PROMPTS_PATH = Path(__file__).resolve().parent / "prompts"
 
 
+def compute_cell_key(
+    model_name: str,
+    scenario_id: str,
+    dsl_name: str,
+    ablation: "AblationFlags",
+    params: InferenceParams,
+) -> str:
+    payload = {
+        "model": model_name,
+        "scenario_id": scenario_id,
+        "dsl": dsl_name,
+        "ablation": ablation.model_dump(),
+        "params": params.model_dump(),
+    }
+    serialized = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha1(serialized.encode("utf-8")).hexdigest()[:16]
+
+
 class Scenario(BaseModel):
     id: str
     source: Any
@@ -51,6 +70,12 @@ class DSLSetup(BaseModel):
 
 class MirroringPipelineOutput(BaseModel):
     id: uuid.UUID = Field(default_factory=uuid.uuid4)
+    # Deterministic fingerprint of the dispatch tuple (model, scenario_id, dsl,
+    # ablation, requested params). Used by the startup resume scan to skip
+    # cells that already landed on disk; computed before dispatch so it sees
+    # the requested params, not any post-call rewrites (e.g. Anthropic's
+    # forced temperature=1.0 under extended thinking).
+    cell_key: str
     scenario_id: str
     ablation: AblationFlags
     dsl: DSLSetup
@@ -129,6 +154,11 @@ class MirroringPipeline:
             stamp = datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%SZ")
             output_path = Path(f"output-{stamp}.ndjson")
 
+        # Resume: any cell whose key already appears on disk is skipped.
+        # Failed rows (symbolic_output1.success=False) count as done — the
+        # failure is a reproducible property of the dispatch tuple.
+        completed = self._load_completed_cell_keys(output_path)
+
         t = threading.Thread(
             target=self.writer_worker, args=(output_path,), daemon=True
         )
@@ -149,15 +179,31 @@ class MirroringPipeline:
             # consumes (declared on the InferenceModel subclass).
             profiles = expand_for_backend(self.cfg.inference, model)
 
-            tasks = [
-                self._run_task(scenario, dsl, model, abl, params)
+            cells = [
+                (
+                    scenario,
+                    dsl,
+                    abl,
+                    params,
+                    compute_cell_key(model.name, scenario.id, dsl.name, abl, params),
+                )
                 for scenario in self.scenarios
                 for dsl in self.cfg.dsl
                 for abl in ablations
                 for params in profiles
             ]
 
-            logging.info(f"Dispatching {len(tasks)} datapoint(s) for {model.name}")
+            skipped = sum(1 for *_, key in cells if key in completed)
+            tasks = [
+                self._run_task(scenario, dsl, model, abl, params, cell_key)
+                for scenario, dsl, abl, params, cell_key in cells
+                if cell_key not in completed
+            ]
+
+            logging.info(
+                f"Dispatching {len(tasks)} datapoint(s) for {model.name} "
+                f"(skipped {skipped} already complete)"
+            )
             await asyncio.gather(*tasks)
             logging.info(f"✓ Done with {model.name}")
 
@@ -173,8 +219,11 @@ class MirroringPipeline:
         model: InferenceModel,
         ablation: AblationFlags,
         params: InferenceParams,
+        cell_key: str,
     ) -> None:
-        dp = await self.produce_datapoint(scenario, dsl, model, ablation, params)
+        dp = await self.produce_datapoint(
+            scenario, dsl, model, ablation, params, cell_key
+        )
         # Queue.put is thread-safe and non-blocking on an unbounded queue, so it
         # is safe to call directly from the event loop. The writer thread is the
         # sole consumer, which serialises file writes.
@@ -183,6 +232,53 @@ class MirroringPipeline:
             f"  ✓ {model.name} | scenario={scenario.id} dsl={dsl.name} "
             f"syntax={ablation.syntax} few_shot={ablation.few_shot}"
         )
+
+    def _load_completed_cell_keys(self, fp: Path) -> set[str]:
+        """Scan an existing output file and collect cell_keys for resume.
+
+        A torn final line (a partial fsync from a prior crash) is tolerated
+        with a warning. Any earlier malformed line is real corruption and
+        raises. Rows without a `cell_key` field are legacy (predate this
+        column) and are counted but ignored — those runs simply re-dispatch.
+        """
+        if not fp.exists():
+            return set()
+
+        with fp.open("r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+        completed: set[str] = set()
+        legacy = 0
+        last_idx = len(lines) - 1
+        for i, raw in enumerate(lines):
+            line = raw.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                if i == last_idx:
+                    logging.warning(
+                        f"Ignoring torn final line in {fp} (likely from a "
+                        f"prior crash mid-fsync)"
+                    )
+                    continue
+                raise
+            key = row.get("cell_key")
+            if key is None:
+                legacy += 1
+                continue
+            completed.add(key)
+
+        if legacy:
+            logging.info(
+                f"{legacy} legacy row(s) in {fp} ignored for resume (no cell_key)"
+            )
+        if completed:
+            logging.info(
+                f"Resume: found {len(completed)} completed cell(s) in {fp}"
+            )
+        return completed
 
     def writer_worker(self, fp: Path):
         logging.info(f"Writer worker for {self.__class__.__name__} started")
@@ -205,6 +301,7 @@ class MirroringPipeline:
         model: InferenceModel,
         ablation: AblationFlags,
         params: InferenceParams,
+        cell_key: str,
     ) -> MirroringPipelineOutput:
 
         legenda = await self.generate_legenda(scenario, model, params)
@@ -260,6 +357,7 @@ class MirroringPipeline:
             )
 
         return MirroringPipelineOutput(
+            cell_key=cell_key,
             scenario_id=scenario.id,
             model=model.name,
             dsl=DSLSetup(name=dsl.name),

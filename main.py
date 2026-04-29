@@ -18,6 +18,8 @@ def _main() -> None:
     )
 
     cfg = load_config(args.config)
+    if args.output is not None:
+        cfg.output = args.output
 
     scenarios: list[Scenario] = []
     with open(cfg.scenarios, "r") as f:
@@ -44,6 +46,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=Path("config.yaml"),
         metavar="FILE",
         help="Path to the configuration file in YAML format.",
+    )
+
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        required=False,
+        default=None,
+        metavar="FILE",
+        help=(
+            "Path to the ndjson output file. Overrides `output:` in the "
+            "config. Resume against a file requires a stable path here or "
+            "in the config; the timestamp default never resumes."
+        ),
     )
 
     parser.add_argument(
