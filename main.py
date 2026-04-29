@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 from src.config import load_config
-from src.mirroring import MirroringPipeline, Scenario
+from src.pipeline import MirroringPipeline, Scenario
 
 
 def _main() -> None:
