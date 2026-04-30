@@ -6,13 +6,12 @@ This repository contains the code, input data, and generated outputs for the pip
 
 ### Configuration
 
-The experimental setup is configured via YAML. Three ready-made configs are provided:
+The experimental setup is configured via YAML. Two ready-made configs are provided:
 
 - [`config.yaml`](./config.yaml) — full setup (cloud + local Ollama models)
-- [`config.cloud.yaml`](./config.cloud.yaml) — cloud providers only (Anthropic, OpenAI, Gemini)
-- [`config.local.yaml`](./config.local.yaml) — local Ollama models only
+- [`config.smoke.yaml`](./config.smoke.yaml) — minimal end-to-end smoke configuration
 
-Pass any config file with `--config FILE`.
+Pass either with `--config FILE`. Cloud-provider entries are activated only when their respective API keys are present in the environment; entries without keys are skipped.
 
 ### Local Execution
 
@@ -21,6 +20,7 @@ With the [uv](https://docs.astral.sh/uv/) package manager:
 ```sh
 uv sync                                       # install dependencies + the `mirror` CLI
 uv run mirror --config config.yaml            # run the pipelines
+uv run mirror --config config.smoke.yaml      # quick end-to-end smoke check
 uv run mirror --help                          # see all options
 ```
 
@@ -48,7 +48,7 @@ API tokens are injected via `--env-file`:
 ```sh
 docker run --rm -it \
   --env-file .env \
-  -v "$(pwd)/config.cloud.yaml:/app/config.yaml" \
+  -v "$(pwd)/config.yaml:/app/config.yaml" \
   -v "$(pwd)/data:/app/data" \
   -v hf-cache:/root/.cache/huggingface \
   semantics-2026-mirror --config /app/config.yaml
@@ -63,7 +63,7 @@ Ollama must already be running on the host (`ollama serve`). The container reach
 ```sh
 docker run --rm -it \
   -e OLLAMA_HOST=http://host.docker.internal:11434 \
-  -v "$(pwd)/config.local.yaml:/app/config.yaml" \
+  -v "$(pwd)/config.yaml:/app/config.yaml" \
   -v "$(pwd)/data:/app/data" \
   -v hf-cache:/root/.cache/huggingface \
   semantics-2026-mirror --config /app/config.yaml
@@ -75,7 +75,7 @@ docker run --rm -it \
 docker run --rm -it \
   --network=host \
   -e OLLAMA_HOST=http://localhost:11434 \
-  -v "$(pwd)/config.local.yaml:/app/config.yaml" \
+  -v "$(pwd)/config.yaml:/app/config.yaml" \
   -v "$(pwd)/data:/app/data" \
   -v hf-cache:/root/.cache/huggingface \
   semantics-2026-mirror --config /app/config.yaml
