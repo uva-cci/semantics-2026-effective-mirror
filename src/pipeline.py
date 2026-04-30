@@ -113,6 +113,9 @@ class MirroringPipeline:
         self.tmpl_encode = self.tmpl_env.get_template("encode.jinja")
         self.tmpl_decode = self.tmpl_env.get_template("decode.jinja")
         self.tmpl_legenda = self.tmpl_env.get_template("legenda.jinja")
+        self.tmpl_refine = self.tmpl_env.get_template("refine.jinja")
+        self.tmpl_error_decode = self.tmpl_env.get_template("error_decode.jinja")
+        self.tmpl_error_validation = self.tmpl_env.get_template("error_validation.jinja")
 
         # DSL name -> raw JSON-schema text
         self.dsl_schemas: dict[str, str] = {}
@@ -407,11 +410,10 @@ class MirroringPipeline:
             if key in self.legendas:
                 return self.legendas[key]
 
-            def render(attempt: dict | None) -> str:
+            def render() -> str:
                 return self.tmpl_legenda.render(
                     {
                         "scenario": scenario.description,
-                        "attempt": attempt,
                     }
                 )
 
@@ -436,7 +438,7 @@ class MirroringPipeline:
         schema_text = self.dsl_schemas[dsl.name]
         examples = self.examples[dsl.name]
 
-        def render(attempt: dict | None) -> str:
+        def render() -> str:
             return self.tmpl_encode.render(
                 {
                     "scenario": scenario,
@@ -445,7 +447,6 @@ class MirroringPipeline:
                     "schema": schema_text,
                     "examples": examples,
                     "legenda": legenda,
-                    "attempt": attempt,
                 }
             )
 
@@ -453,22 +454,23 @@ class MirroringPipeline:
 
     async def _generate_validated(
         self,
-        render_prompt: Callable[[dict | None], str],
+        render_base: Callable[[], str],
         schema_text: str,
         model: InferenceModel,
         params: InferenceParams,
     ) -> InferenceOutput:
         """Render → generate → validate-against-schema → retry on failure.
 
-        `render_prompt(attempt)` is called once with `None` for the initial
-        prompt and then again with `{"previous": ..., "error": ...}` for each
-        retry, so the caller's template can include attempt feedback. The same
+        `render_base()` is the task prompt; on retries the harness appends
+        `refine.jinja` (the self-refinement addendum carrying the prior output
+        and validator feedback) so callers stay refinement-agnostic. The same
         retry budget (`cfg.max_syntax_retries`) and rich validator-error format
         applied to the original encode loop is shared by every consumer.
         """
         assert self.cfg.max_syntax_retries > 0
 
-        prompt = render_prompt(None)
+        base = render_base()
+        prompt = base
         logging.debug(prompt)
 
         ok = False
@@ -481,7 +483,10 @@ class MirroringPipeline:
                 break
             errors.append(err)
 
-            prompt = render_prompt({"previous": output.text, "error": err})
+            refine = self.tmpl_refine.render(
+                {"previous": output.text, "error": err}
+            )
+            prompt = base + "\n\n" + refine
             logging.debug(prompt)
 
             output = await model.generate(prompt, params)
@@ -510,6 +515,11 @@ class MirroringPipeline:
         a concrete "Fix:" line. Without this shape small models tend to either
         re-emit the same mistake or "fix" the wrong layer (e.g. retype a
         well-formed value when the actual problem was a missing required key).
+
+        This function only does the *structural* extraction — path joining,
+        branch deduping, JSON truncation. The user-facing prose lives in
+        `error_decode.jinja` (JSONDecodeError) and `error_validation.jinja`
+        (jsonschema.ValidationError).
         """
         schema = json.loads(schema_text)
         try:
@@ -520,12 +530,13 @@ class MirroringPipeline:
             start = max(0, e.pos - 40)
             end = min(len(s), e.pos + 40)
             snippet = s[start:end].replace("\n", "\\n")
-            err = (
-                f"The output is not valid JSON.\n"
-                f"Parser error: {e.msg} at line {e.lineno}, column {e.colno}.\n"
-                f"Context (around the failure): ...{snippet}...\n"
-                f"Fix: produce a single well-formed JSON document with no "
-                f"surrounding prose, markdown, or code fences."
+            err = self.tmpl_error_decode.render(
+                {
+                    "msg": e.msg,
+                    "lineno": e.lineno,
+                    "colno": e.colno,
+                    "snippet": snippet,
+                }
             )
             logging.debug(err)
             return (False, err)
@@ -538,16 +549,6 @@ class MirroringPipeline:
                 "/" + "/".join(str(p) for p in e.absolute_path)
                 if e.absolute_path
                 else "<root>"
-            )
-            err = (
-                f"The output is valid JSON but does not conform to the schema.\n"
-                f"Failing keyword: {e.validator}\n"
-                f"Schema requirement: {json.dumps(e.validator_value)[:200]}\n"
-                f"JSON path of the failure: {path}\n"
-                f"Offending value: {json.dumps(e.instance)[:200]}\n"
-                f"Reason: {e.message}\n"
-                f"Fix: change the value at {path} so that the "
-                f"`{e.validator}` constraint above is satisfied."
             )
             # For oneOf/anyOf failures, the top-level message is generic
             # ("is not valid under any of the given schemas") and the
@@ -564,6 +565,7 @@ class MirroringPipeline:
             # single branch the heuristic is fine — so the model sees a
             # pattern/regex-level message per variant rather than the generic
             # nested-oneOf wrapper.
+            branches: list[dict[str, str]] = []
             if e.context:
                 def _leaf(s: jsonschema.ValidationError) -> jsonschema.ValidationError:
                     while s.context:
@@ -573,11 +575,10 @@ class MirroringPipeline:
                 # repeat the same message verbatim (typically the
                 # `additionalProperties: false` failure, which fires on every
                 # variant whenever the model emits keys none of them want).
-                # Dedupe on the rendered string to keep the prompt compact
-                # while preserving each distinct failure mode the model can
-                # use to pick a target variant.
-                seen: set[str] = set()
-                lines: list[str] = []
+                # Dedupe on (message, path) to keep the prompt compact while
+                # preserving each distinct failure mode the model can use to
+                # pick a target variant.
+                seen: set[tuple[str, str]] = set()
                 for sub in e.context:
                     leaf = _leaf(sub)
                     leaf_path = (
@@ -585,15 +586,21 @@ class MirroringPipeline:
                         if leaf.absolute_path
                         else "<root>"
                     )
-                    line = f"  - {leaf.message} at {leaf_path}"
-                    if line in seen:
+                    key = (leaf.message, leaf_path)
+                    if key in seen:
                         continue
-                    seen.add(line)
-                    lines.append(line)
-                err += (
-                    f"\nBranch errors (across every `{e.validator}` variant "
-                    f"in the order listed above; satisfy any single variant):\n"
-                    + "\n".join(lines)
-                )
+                    seen.add(key)
+                    branches.append({"message": leaf.message, "path": leaf_path})
+
+            err = self.tmpl_error_validation.render(
+                {
+                    "validator": e.validator,
+                    "validator_value": json.dumps(e.validator_value)[:200],
+                    "path": path,
+                    "instance": json.dumps(e.instance)[:200],
+                    "message": e.message,
+                    "branches": branches,
+                }
+            )
             logging.debug(err)
             return (False, err)

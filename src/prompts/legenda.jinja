@@ -14,20 +14,6 @@ You are a vocabulary-extraction specialist. Read the scenario below and produce 
 6. **`notes`** *(optional)* - A short clarifying gloss when the term-to-label mapping is non-obvious.
 7. **No extra text** - Do not add comments, explanations, or surrounding code fences. The output must parse as a single JSON document.
 
-{% if attempt %}
-## Your previous attempt was rejected by the JSON-schema validator
-
-Previous output:
-
-{{ attempt.previous }}
-
-Validator feedback:
-
-{{ attempt.error }}
-
-Produce a corrected JSON glossary that addresses the feedback above.
-{% endif %}
-
 ## Final Output
 Respond **only** with the JSON glossary.
 Do **not** add any surrounding Markdown, code fences, or explanatory text.

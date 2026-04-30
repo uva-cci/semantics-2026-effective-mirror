@@ -1,0 +1,11 @@
+The output is valid JSON but does not conform to the schema.
+Failing keyword: {{ validator }}
+Schema requirement: {{ validator_value }}
+JSON path of the failure: {{ path }}
+Offending value: {{ instance }}
+Reason: {{ message }}
+Fix: change the value at {{ path }} so that the `{{ validator }}` constraint above is satisfied.
+{% if branches %}
+Branch errors (across every `{{ validator }}` variant in the order listed above; satisfy any single variant):
+{% for b in branches %}  - {{ b.message }} at {{ b.path }}
+{% endfor %}{% endif %}

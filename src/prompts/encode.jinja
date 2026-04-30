@@ -41,20 +41,6 @@ The following canonical labels were extracted for this scenario. When the schema
 
 {% endif %}
 
-{% if attempt %}
-## Your previous attempt was rejected by the JSON-schema validator
-
-Previous output:
-
-{{ attempt.previous }}
-
-Validator feedback:
-
-{{ attempt.error }}
-
-Produce a corrected JSON document that addresses the feedback above.
-{% endif %}
-
 ## Final Output
 Respond **only** with the JSON specification.
 Do **not** add any surrounding Markdown, code fences, or explanatory text.
