@@ -379,9 +379,12 @@ class MirroringPipeline:
         a_text: str,
         b_text: str,
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        a = encoder.encode(a_text, convert_to_tensor=True, show_progress_bar=False)
-        b = encoder.encode(b_text, convert_to_tensor=True, show_progress_bar=False)
-        return a, b
+        embs = encoder.encode(
+            [a_text, b_text],
+            convert_to_tensor=True,
+            show_progress_bar=False,
+        )
+        return embs[0], embs[1]
 
     async def _get_legenda_lock(self, key: tuple[str, str]) -> asyncio.Lock:
         async with self.legenda_locks_guard:
