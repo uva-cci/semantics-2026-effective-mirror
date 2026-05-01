@@ -1,15 +1,15 @@
-scenarios: data/scenarios.smoke.json
+scenarios: inputs/scenarios.smoke.json
 
-legenda_schema: data/dsl/legenda.schema.json
+legenda_schema: inputs/dsl/legenda.schema.json
 
 max_syntax_retries: 2
 
-output: output-smoke.ndjson
+output: outputs/output-smoke.ndjson
 
 dsl:
   - name: dcpl
-    examples: data/dsl/dcpl/examples.json
-    schema: data/dsl/dcpl/schema.json
+    examples: inputs/dsl/dcpl/examples.json
+    schema: inputs/dsl/dcpl/schema.json
 
 models:
   - name: gemma4-e4b
@@ -19,9 +19,9 @@ models:
         driver: ollama
         model_id: gemma4:e4b
 
-encodings:
-  - name: pplx-embed-v1-0.6b
-    org: perplexity-ai
+encoding:
+  name: pplx-embed-v1-0.6b
+  org: perplexity-ai
 
 inference:
   concurrency:

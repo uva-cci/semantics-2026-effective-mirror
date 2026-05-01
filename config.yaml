@@ -1,17 +1,17 @@
-scenarios: data/scenarios.json
+scenarios: inputs/scenarios.json
 
-legenda_schema: data/dsl/legenda.schema.json
+legenda_schema: inputs/dsl/legenda.schema.json
 
 max_syntax_retries: 3
 
 dsl:
   - name: dcpl
-    examples: data/dsl/dcpl/examples.json
-    schema: data/dsl/dcpl/schema.json
+    examples: inputs/dsl/dcpl/examples.json
+    schema: inputs/dsl/dcpl/schema.json
 
   - name: odrl
-    examples: data/dsl/odrl/examples.json
-    schema: data/dsl/odrl/schema.json
+    examples: inputs/dsl/odrl/examples.json
+    schema: inputs/dsl/odrl/schema.json
 
 models:
   # --- LOCAL MODELS (OLLAMA) ---
@@ -86,9 +86,9 @@ models:
       provider: google
       model_id: gemini-3-flash-preview
 
-encodings:
-  - name: pplx-embed-v1-0.6b
-    org: perplexity-ai
+encoding:
+  name: pplx-embed-v1-0.6b
+  org: perplexity-ai
 
 inference:
   concurrency:

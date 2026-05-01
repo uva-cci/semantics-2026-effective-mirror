@@ -136,7 +136,14 @@ cython_debug/
 .DS_Store
 
 # project-specifics
-data/encoders/**
-!data/encoders/.gitkeep
-data/models/**
-!data/models/.gitkeep
+inputs/encoders/**
+!inputs/encoders/.gitkeep
+inputs/models/**
+!inputs/models/.gitkeep
+
+# Run outputs: iterative runs at the top level are ignored; the curated
+# `published/` subdirectory is tracked and is where paper-ready NDJSON +
+# CSV artefacts are committed by hand.
+outputs/*
+!outputs/.gitkeep
+!outputs/published/

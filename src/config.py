@@ -119,7 +119,7 @@ class Config(BaseModel):
     legenda_schema: FilePath
     dsl: list[DSLConfig]
     models: list[ModelConfig]
-    encodings: list[EmbeddingModelConfig]
+    encoding: EmbeddingModelConfig
     inference: InferenceParamsConfig
     max_syntax_retries: int
     output: pathlib.Path | None = None

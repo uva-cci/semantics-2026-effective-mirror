@@ -12,13 +12,10 @@ from typing import Any, Callable
 
 import jsonschema
 import jsonschema.exceptions
-import torch
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 from pydantic import BaseModel, Field
-from sentence_transformers import SentenceTransformer
 
 from src.config import Config, DSLConfig
-from src.utils.embeddings import get_encoder, score_vectors
 from src.utils.models import (
     InferenceModel,
     InferenceOutput,
@@ -28,6 +25,54 @@ from src.utils.models import (
 )
 
 PROMPTS_PATH = Path(__file__).resolve().parent / "prompts"
+
+
+def load_completed_cell_keys(fp: Path) -> set[str]:
+    """Scan an existing NDJSON output file and collect cell_keys for resume.
+
+    A torn final line (a partial fsync from a prior crash) is tolerated
+    with a warning. Any earlier malformed line is real corruption and
+    raises. Rows without a `cell_key` field are legacy (predate this
+    column) and are counted but ignored — those runs simply re-dispatch.
+    """
+    if not fp.exists():
+        return set()
+
+    with fp.open("r", encoding="utf-8") as f:
+        lines = f.readlines()
+
+    completed: set[str] = set()
+    legacy = 0
+    last_idx = len(lines) - 1
+    for i, raw in enumerate(lines):
+        line = raw.strip()
+        if not line:
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            if i == last_idx:
+                logging.warning(
+                    f"Ignoring torn final line in {fp} (likely from a "
+                    f"prior crash mid-fsync)"
+                )
+                continue
+            raise
+        key = row.get("cell_key")
+        if key is None:
+            legacy += 1
+            continue
+        completed.add(key)
+
+    if legacy:
+        logging.info(
+            f"{legacy} legacy row(s) in {fp} ignored for resume (no cell_key)"
+        )
+    if completed:
+        logging.info(
+            f"Resume: found {len(completed)} completed cell(s) in {fp}"
+        )
+    return completed
 
 
 def compute_cell_key(
@@ -85,13 +130,14 @@ class MirroringPipelineOutput(BaseModel):
     symbolic_output2: InferenceOutput | None = None
     natural_language: InferenceOutput | None = None
     legenda: InferenceOutput
-    # encoder -> score
-    semantic_scores: dict[str, float]
-    symbolic_equivalence: bool
 
 
 class MirroringPipeline:
-    def __init__(self, cfg: Config, scenarios: list[Scenario]) -> None:
+    def __init__(
+        self,
+        cfg: Config,
+        scenarios: list[Scenario],
+    ) -> None:
         self.cfg = cfg
         self.scenarios = scenarios
         self.output: Queue[MirroringPipelineOutput | None] = Queue()
@@ -137,14 +183,6 @@ class MirroringPipeline:
         self.legenda_locks: dict[tuple[str, str], asyncio.Lock] = {}
         self.legenda_locks_guard: asyncio.Lock = asyncio.Lock()
 
-        self.encoders: dict[str, SentenceTransformer] = {}
-        self.encoder_locks: dict[str, asyncio.Lock] = {}
-        for encoding in self.cfg.encodings:
-            self.encoders[encoding.name] = get_encoder(encoding)
-            # Per-encoder lock prevents concurrent .encode() calls on the same
-            # SentenceTransformer instance — not safe under GPU contention.
-            self.encoder_locks[encoding.name] = asyncio.Lock()
-
     def run(self) -> None:
         asyncio.run(self._run_async())
 
@@ -155,12 +193,14 @@ class MirroringPipeline:
             output_path = self.cfg.output
         else:
             stamp = datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-            output_path = Path(f"output-{stamp}.ndjson")
+            output_path = Path("outputs") / f"output-{stamp}.ndjson"
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Resume: any cell whose key already appears on disk is skipped.
         # Failed rows (symbolic_output1.success=False) count as done — the
         # failure is a reproducible property of the dispatch tuple.
-        completed = self._load_completed_cell_keys(output_path)
+        completed = load_completed_cell_keys(output_path)
 
         t = threading.Thread(
             target=self.writer_worker, args=(output_path,), daemon=True
@@ -236,53 +276,6 @@ class MirroringPipeline:
             f"syntax={ablation.syntax} few_shot={ablation.few_shot}"
         )
 
-    def _load_completed_cell_keys(self, fp: Path) -> set[str]:
-        """Scan an existing output file and collect cell_keys for resume.
-
-        A torn final line (a partial fsync from a prior crash) is tolerated
-        with a warning. Any earlier malformed line is real corruption and
-        raises. Rows without a `cell_key` field are legacy (predate this
-        column) and are counted but ignored — those runs simply re-dispatch.
-        """
-        if not fp.exists():
-            return set()
-
-        with fp.open("r", encoding="utf-8") as f:
-            lines = f.readlines()
-
-        completed: set[str] = set()
-        legacy = 0
-        last_idx = len(lines) - 1
-        for i, raw in enumerate(lines):
-            line = raw.strip()
-            if not line:
-                continue
-            try:
-                row = json.loads(line)
-            except json.JSONDecodeError:
-                if i == last_idx:
-                    logging.warning(
-                        f"Ignoring torn final line in {fp} (likely from a "
-                        f"prior crash mid-fsync)"
-                    )
-                    continue
-                raise
-            key = row.get("cell_key")
-            if key is None:
-                legacy += 1
-                continue
-            completed.add(key)
-
-        if legacy:
-            logging.info(
-                f"{legacy} legacy row(s) in {fp} ignored for resume (no cell_key)"
-            )
-        if completed:
-            logging.info(
-                f"Resume: found {len(completed)} completed cell(s) in {fp}"
-            )
-        return completed
-
     def writer_worker(self, fp: Path):
         logging.info(f"Writer worker for {self.__class__.__name__} started")
 
@@ -315,7 +308,6 @@ class MirroringPipeline:
 
         natural_language: InferenceOutput | None = None
         symbolic_output2: InferenceOutput | None = None
-        semantic_scores: dict[str, float] = {}
 
         if symbolic_output1.success:
             decode_prompt = self.tmpl_decode.render(
@@ -340,16 +332,6 @@ class MirroringPipeline:
             symbolic_output2 = await self.generate_symbolic(
                 natural_language.text, dsl, model, ablation, params, legenda.text
             )
-
-            for encoding, encoder in self.encoders.items():
-                async with self.encoder_locks[encoding]:
-                    a, b = await asyncio.to_thread(
-                        self._encode_pair,
-                        encoder,
-                        scenario.description,
-                        natural_language.text,
-                    )
-                semantic_scores[encoding] = score_vectors(a, b)
         else:
             logging.info(
                 f"  ⤼ skipping decode/re-encode for {model.name} | "
@@ -369,22 +351,7 @@ class MirroringPipeline:
             symbolic_output2=symbolic_output2,
             natural_language=natural_language,
             legenda=legenda,
-            semantic_scores=semantic_scores,
-            symbolic_equivalence=False,  # TODO: run symbolic static analysis
         )
-
-    @staticmethod
-    def _encode_pair(
-        encoder: SentenceTransformer,
-        a_text: str,
-        b_text: str,
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        embs = encoder.encode(
-            [a_text, b_text],
-            convert_to_tensor=True,
-            show_progress_bar=False,
-        )
-        return embs[0], embs[1]
 
     async def _get_legenda_lock(self, key: tuple[str, str]) -> asyncio.Lock:
         async with self.legenda_locks_guard:

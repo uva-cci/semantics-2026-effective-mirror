@@ -35,7 +35,8 @@ COPY . /app
 RUN --mount=type=cache,target=$UV_CACHE_DIR \
     uv sync --frozen
 
-VOLUME /app/data
+VOLUME /app/inputs
+VOLUME /app/outputs
 VOLUME /root/.cache/huggingface
 
 ENTRYPOINT ["mirror"]

@@ -18,11 +18,19 @@ Pass either with `--config FILE`. Cloud-provider entries are activated only when
 With the [uv](https://docs.astral.sh/uv/) package manager:
 
 ```sh
-uv sync                                       # install dependencies + the `mirror` CLI
-uv run mirror --config config.yaml            # run the pipelines
-uv run mirror --config config.smoke.yaml      # quick end-to-end smoke check
-uv run mirror --help                          # see all options
+uv sync                                                        # install dependencies + the `mirror` CLI
+uv run mirror --config config.yaml run                         # produce datapoints (encode → decode → re-encode)
+uv run mirror --config config.smoke.yaml run                   # quick end-to-end smoke check
+uv run mirror --config config.yaml analyze outputs/run.ndjson  # score a previously-produced NDJSON → CSV
+uv run mirror --help                                           # see all options
 ```
+
+The CLI has two independent subcommands:
+
+- **`run`** — drives the LLM matrix and writes one NDJSON row per cell (`outputs/output-<timestamp>.ndjson` by default). Production only; no scoring.
+- **`analyze INPUT_NDJSON`** — reads an NDJSON produced by `run` and emits a scores CSV (default `outputs/<input-stem>.scores.csv`). One row per cell, with structural ratios and per-encoder semantic similarities as columns. Always rewritten in full (analysis is cheap; rerun freely after swapping encoders or adding metrics).
+
+Outputs land under `outputs/` (gitignored); inputs (scenarios + DSL schemas/examples) live under `inputs/`.
 
 Cloud providers read their API tokens from the environment (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`). Copy [`.env.example`](./.env.example) to `.env` and source it, or export the variables in your shell.
 
@@ -30,9 +38,10 @@ Local Ollama models require `ollama serve` running on the host. By default the O
 
 ### Docker Execution
 
-The [`Dockerfile`](./Dockerfile) builds an image whose entrypoint is the `mirror` CLI. The container expects two mounts:
+The [`Dockerfile`](./Dockerfile) builds an image whose entrypoint is the `mirror` CLI. The container expects three mounts:
 
-- `/app/data` — project assets (scenarios + DSL grammars/schemas/examples), bind-mounted from the host so configs can reference them.
+- `/app/inputs` — project assets (scenarios + DSL grammars/schemas/examples), bind-mounted from the host so configs can reference them.
+- `/app/outputs` — bind for the NDJSON output files produced by `run` and `analyze`. Bind to a host directory so artefacts survive container restarts.
 - `/root/.cache/huggingface` — sentence-transformer encoder cache, persisted across container restarts so encoders are downloaded only once. A named Docker volume (e.g. `hf-cache`) or a host bind to your existing `~/.cache/huggingface` both work.
 
 Ollama models live in the daemon's own cache on the host, so no volume is needed for them inside the container.
@@ -49,9 +58,10 @@ API tokens are injected via `--env-file`:
 docker run --rm -it \
   --env-file .env \
   -v "$(pwd)/config.yaml:/app/config.yaml" \
-  -v "$(pwd)/data:/app/data" \
+  -v "$(pwd)/inputs:/app/inputs" \
+  -v "$(pwd)/outputs:/app/outputs" \
   -v hf-cache:/root/.cache/huggingface \
-  semantics-2026-mirror --config /app/config.yaml
+  semantics-2026-mirror --config /app/config.yaml run
 ```
 
 #### Recipe B — Ollama running on the host
@@ -64,9 +74,10 @@ Ollama must already be running on the host (`ollama serve`). The container reach
 docker run --rm -it \
   -e OLLAMA_HOST=http://host.docker.internal:11434 \
   -v "$(pwd)/config.yaml:/app/config.yaml" \
-  -v "$(pwd)/data:/app/data" \
+  -v "$(pwd)/inputs:/app/inputs" \
+  -v "$(pwd)/outputs:/app/outputs" \
   -v hf-cache:/root/.cache/huggingface \
-  semantics-2026-mirror --config /app/config.yaml
+  semantics-2026-mirror --config /app/config.yaml run
 ```
 
 **Linux:**
@@ -76,9 +87,10 @@ docker run --rm -it \
   --network=host \
   -e OLLAMA_HOST=http://localhost:11434 \
   -v "$(pwd)/config.yaml:/app/config.yaml" \
-  -v "$(pwd)/data:/app/data" \
+  -v "$(pwd)/inputs:/app/inputs" \
+  -v "$(pwd)/outputs:/app/outputs" \
   -v hf-cache:/root/.cache/huggingface \
-  semantics-2026-mirror --config /app/config.yaml
+  semantics-2026-mirror --config /app/config.yaml run
 ```
 
 Alternatively on Linux, instead of `--network=host`:
