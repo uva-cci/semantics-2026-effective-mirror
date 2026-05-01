@@ -20,14 +20,14 @@ models:
       kind: local
       params:
         driver: ollama
-        model_id: llama4:17b-scout
+        model_id: llama4:17b-scout-16e-instruct-q4_K_M
 
   - name: llama4-maverick
     meta:
       kind: local
       params:
         driver: ollama
-        model_id: llama4:17b-maverick
+        model_id: llama4:17b-maverick-128e-instruct-q4_K_M
 
   - name: qwen3.6-moe
     meta:
