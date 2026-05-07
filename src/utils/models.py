@@ -1,6 +1,7 @@
 import asyncio
 import itertools
 import logging
+import os
 from abc import ABC, abstractmethod
 from typing import Any, Literal, cast, override
 
@@ -24,8 +25,10 @@ from src.config import (
     CloudModelConfig,
     InferenceConcurrencyConfig,
     InferenceParamsConfig,
+    LlamaCppLocalModelParams,
     LocalModelConfig,
     ModelConfig,
+    ModelInferenceOverride,
     OllamaLocalModelParams,
 )
 
@@ -210,12 +213,112 @@ class OllamaInferenceModel(InferenceModel):
         )
 
 
+class LlamaCppInferenceModel(InferenceModel):
+    """
+    Local inference using `llama-server` (the OpenAI-compatible HTTP API
+    shipped with llama.cpp).
+
+    The transport reuses the OpenAI Python SDK, but the sweep surface mirrors
+    Ollama's: open-weights samplers (`min_p`, `top_k`, `repeat_penalty`) are
+    pushed through the SDK's `extra_body` escape hatch, which forwards
+    non-standard fields to the server unchanged. Server lifecycle and GGUF
+    fetching (e.g. `llama-server -hf Qwen/Qwen3-30B-A3B-GGUF:Q4_K_M`) are
+    operator-side; this class only speaks HTTP to an already-running endpoint.
+    """
+
+    BACKEND_KEY = "llamacpp"
+    CONSUMES_DEFAULTS = frozenset({"temperature"})
+    CONSUMES_CONSTANTS = frozenset({"seed", "top_k", "repetition_penalty"})
+
+    def __init__(
+        self, name: str, cfg: LlamaCppLocalModelParams, sem: asyncio.Semaphore
+    ) -> None:
+        super().__init__(name, sem)
+        self.cfg = cfg
+
+        api_key = (
+            os.environ[cfg.api_key_env] if cfg.api_key_env is not None else "EMPTY"
+        )
+        self._client = AsyncOpenAI(base_url=cfg.base_url, api_key=api_key)
+
+        # Pre-flight: hit `/v1/models` synchronously so a forgotten
+        # `llama-server` launch or a `model_id` that doesn't match what the
+        # server registered fails at construction with an actionable message,
+        # not mid-matrix.
+        preflight = openai.OpenAI(base_url=cfg.base_url, api_key=api_key)
+        try:
+            served = {m.id for m in preflight.models.list().data}
+        except openai.OpenAIError as e:
+            raise RuntimeError(
+                f"llama.cpp pre-flight failed for {cfg.base_url}: {e}. "
+                "Is `llama-server` running and reachable?"
+            ) from e
+        if cfg.model_id not in served:
+            raise ValueError(
+                f"Model {cfg.model_id!r} not loaded on llama-server at "
+                f"{cfg.base_url}; server reports: {sorted(served)}. Launch "
+                "`llama-server` so its registered model id matches `model_id`."
+            )
+
+    @override
+    async def generate(self, prompt: str, params: InferenceParams) -> InferenceOutput:
+        kwargs: CompletionCreateParamsNonStreaming = {
+            "model": self.cfg.model_id,
+            "messages": [{"role": "user", "content": prompt}],
+        }
+        if params.temperature is not None:
+            kwargs["temperature"] = params.temperature
+        if params.top_p is not None:
+            kwargs["top_p"] = params.top_p
+        if params.seed is not None:
+            kwargs["seed"] = params.seed
+
+        # Non-OpenAI sampling axes flow through `extra_body`, the SDK's
+        # documented escape hatch. llama-server reads `min_p`, `top_k`,
+        # `repeat_penalty` directly off the request body.
+        raw_extras: dict[str, float | int | None] = {
+            "min_p": params.min_p,
+            "top_k": params.top_k,
+            "repeat_penalty": params.repetition_penalty,
+        }
+        extra_body: dict[str, float | int] = {
+            k: v for k, v in raw_extras.items() if v is not None
+        }
+
+        @backoff.on_exception(backoff.expo, openai.RateLimitError)
+        async def create_completion():
+            return await self._client.chat.completions.create(
+                **kwargs, extra_body=extra_body
+            )
+
+        async with self._sem:
+            result = await create_completion()
+
+        return InferenceOutput(
+            params=params,
+            text=result.choices[0].message.content or "",
+            stats=InferenceStats(
+                completion_tokens=result.usage.completion_tokens,
+                prompt_tokens=result.usage.prompt_tokens,
+                total_tokens=result.usage.total_tokens,
+            )
+            if result.usage
+            else InferenceStats(),
+        )
+
+
 openai_client: AsyncOpenAI | None = None
 
 
 class OpenAIInferenceModel(InferenceModel):
     """
     Cloud inference using the OpenAI API.
+
+    When `cfg.base_url` is unset the model shares a process-wide client
+    (`openai_client`) so direct OpenAI traffic reuses one connection pool.
+    When `cfg.base_url` is set the entry gets its own `AsyncOpenAI` instance
+    pointed at the override — used for self-hosted OpenAI-compatible servers
+    or routers like LiteLLM.
     """
 
     BACKEND_KEY = "openai"
@@ -226,12 +329,18 @@ class OpenAIInferenceModel(InferenceModel):
         self, name: str, cfg: CloudModelConfig, sem: asyncio.Semaphore
     ) -> None:
         super().__init__(name, sem)
-
-        global openai_client
-        if not openai_client:
-            openai_client = AsyncOpenAI()
-
         self.cfg = cfg
+
+        if cfg.base_url is None:
+            global openai_client
+            if not openai_client:
+                openai_client = AsyncOpenAI()
+            self._client: AsyncOpenAI = openai_client
+        else:
+            api_key = (
+                os.environ[cfg.api_key_env] if cfg.api_key_env is not None else "EMPTY"
+            )
+            self._client = AsyncOpenAI(base_url=cfg.base_url, api_key=api_key)
 
     @override
     async def generate(self, prompt: str, params: InferenceParams) -> InferenceOutput:
@@ -260,8 +369,7 @@ class OpenAIInferenceModel(InferenceModel):
 
         @backoff.on_exception(backoff.expo, openai.RateLimitError)
         async def create_completion():
-            assert openai_client
-            return await openai_client.chat.completions.create(**kwargs)
+            return await self._client.chat.completions.create(**kwargs)
 
         async with self._sem:
             result = await create_completion()
@@ -451,8 +559,17 @@ def get_model(
     match cfg.meta.kind:
         case "local":
             local_meta = cast(LocalModelConfig, cfg.meta)
-            sem = _get_semaphore(local_meta.params.driver, concurrency.ollama)
-            return OllamaInferenceModel(cfg.name, local_meta.params, sem)
+            match local_meta.params.driver:
+                case "ollama":
+                    ollama_params = cast(OllamaLocalModelParams, local_meta.params)
+                    sem = _get_semaphore("ollama", concurrency.ollama)
+                    return OllamaInferenceModel(cfg.name, ollama_params, sem)
+                case "llamacpp":
+                    llamacpp_params = cast(
+                        LlamaCppLocalModelParams, local_meta.params
+                    )
+                    sem = _get_semaphore("llamacpp", concurrency.llamacpp)
+                    return LlamaCppInferenceModel(cfg.name, llamacpp_params, sem)
         case "cloud":
             cloud_meta = cast(CloudModelConfig, cfg.meta)
             match cloud_meta.provider:
@@ -473,6 +590,7 @@ def get_model(
 def expand_for_backend(
     cfg: InferenceParamsConfig,
     model: InferenceModel,
+    override: ModelInferenceOverride | None = None,
 ) -> list[InferenceParams]:
     """Materialise the per-model sweep matrix as a list of `InferenceParams`.
 
@@ -481,14 +599,30 @@ def expand_for_backend(
     sweeps axes its API actually consumes. Constants are stamped onto every
     cell. Ollama's `truncation` profiles are a tagged tuple axis: each entry
     contributes both `top_p` and `min_p` (and a label) as a single cell.
+
+    `override`, when supplied, replaces individual sections section-by-section:
+    a non-None `override.defaults` swaps in for the global defaults; a
+    non-None `override.per_backend` swaps in for the global per-backend block;
+    non-None fields on `override.constants` swap in per-constant. `seed` is
+    deliberately not overridable — it stays anchored to the global value so
+    every cell across every model shares one reproducibility baseline.
     """
     sweep_axes: list[list[tuple[str, Any]]] = []
 
-    defaults_dump = cfg.defaults.model_dump()
+    if override is not None and override.defaults is not None:
+        defaults_dump = override.defaults.model_dump()
+    else:
+        defaults_dump = cfg.defaults.model_dump()
     for axis in model.CONSUMES_DEFAULTS:
         sweep_axes.append([(axis, v) for v in defaults_dump[axis]])
 
-    pb = getattr(cfg.per_backend, model.BACKEND_KEY).model_dump()
+    if override is not None and override.per_backend is not None:
+        # Validator on `ModelConfig` already coerced this dict through the
+        # backend's per-backend Pydantic class, so the shape matches what the
+        # global path produces via `.model_dump()`.
+        pb = override.per_backend
+    else:
+        pb = getattr(cfg.per_backend, model.BACKEND_KEY).model_dump()
     for axis, values in pb.items():
         if axis == "truncation":
             sweep_axes.append([("__truncation__", profile) for profile in values])
@@ -506,7 +640,16 @@ def expand_for_backend(
             else:
                 fields[axis] = value
         for c in model.CONSUMES_CONSTANTS:
-            fields[c] = getattr(cfg.constants, c)
+            override_val: Any = None
+            if (
+                c != "seed"
+                and override is not None
+                and override.constants is not None
+            ):
+                override_val = getattr(override.constants, c, None)
+            fields[c] = (
+                override_val if override_val is not None else getattr(cfg.constants, c)
+            )
         profiles.append(InferenceParams(**fields))
     return profiles
 

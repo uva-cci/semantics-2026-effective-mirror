@@ -214,13 +214,24 @@ class MirroringPipeline:
             AblationFlags(syntax=True, few_shot=True),
         ]
 
+        # Build per-model task groups upfront, then dispatch them all under a
+        # single gather. Concurrency is policed by per-backend semaphores keyed
+        # in `get_model`, so cross-model parallelism is safe — and necessary:
+        # a per-model await would serialise every model behind the previous
+        # one, masking the backend-level concurrency cap and stalling the
+        # first datapoints behind one (scenario, model)'s legenda lock.
+        model_runs: list[tuple[InferenceModel, list[Any]]] = []
         for model_cfg in self.cfg.models:
             logging.info(f"- Model: {model_cfg.name}")
             model = get_model(model_cfg, self.cfg.inference.concurrency)
 
             # Per-model matrix: each backend only sweeps the axes its API
-            # consumes (declared on the InferenceModel subclass).
-            profiles = expand_for_backend(self.cfg.inference, model)
+            # consumes (declared on the InferenceModel subclass). When the
+            # entry carries `inference_override`, it short-circuits the
+            # global matrix sections it specifies.
+            profiles = expand_for_backend(
+                self.cfg.inference, model, model_cfg.inference_override
+            )
 
             cells = [
                 (
@@ -247,8 +258,67 @@ class MirroringPipeline:
                 f"Dispatching {len(tasks)} datapoint(s) for {model.name} "
                 f"(skipped {skipped} already complete)"
             )
-            await asyncio.gather(*tasks)
-            logging.info(f"✓ Done with {model.name}")
+            model_runs.append((model, tasks))
+
+        concurrency_cfg = self.cfg.inference.concurrency
+
+        async def _run_one_model(
+            model: InferenceModel, tasks: list[Any], pool_size: int
+        ) -> None:
+            if not tasks:
+                logging.info(f"✓ Done with {model.name} (no tasks)")
+                return
+
+            # Bounded worker pool: at most `pool_size` cells in flight
+            # end-to-end. Without this cap, `gather(*tasks)` races every cell
+            # through each phase strictly FIFO via the call semaphore — so
+            # all 3920 encodes process before any decode, and the first
+            # datapoint only lands after the entire encode AND decode phase
+            # completes for every cell. With the cap, one cell completes
+            # fully (~4 LLM calls) before the next starts when pool_size=1.
+            pool_size = max(1, pool_size)
+            pending: asyncio.Queue[Any] = asyncio.Queue()
+            for coro in tasks:
+                pending.put_nowait(coro)
+
+            failures: list[BaseException] = []
+
+            async def worker() -> None:
+                while True:
+                    try:
+                        coro = pending.get_nowait()
+                    except asyncio.QueueEmpty:
+                        return
+                    try:
+                        await coro
+                    except Exception as e:
+                        failures.append(e)
+
+            await asyncio.gather(*(worker() for _ in range(pool_size)))
+
+            if failures:
+                logging.warning(
+                    f"✗ {model.name}: {len(failures)}/{len(tasks)} cell(s) "
+                    f"raised; see per-cell ✗ lines above"
+                )
+            logging.info(
+                f"✓ Done with {model.name}: "
+                f"{len(tasks) - len(failures)}/{len(tasks)} succeeded"
+            )
+
+        # Outer gather tolerates exceptions so a crash inside one model's
+        # group can't kill the rest mid-run.
+        await asyncio.gather(
+            *(
+                _run_one_model(
+                    model,
+                    tasks,
+                    getattr(concurrency_cfg, model.BACKEND_KEY),
+                )
+                for model, tasks in model_runs
+            ),
+            return_exceptions=True,
+        )
 
         self.output.put(None)  # tell the writer to finish
         t.join()
@@ -264,9 +334,20 @@ class MirroringPipeline:
         params: InferenceParams,
         cell_key: str,
     ) -> None:
-        dp = await self.produce_datapoint(
-            scenario, dsl, model, ablation, params, cell_key
-        )
+        try:
+            dp = await self.produce_datapoint(
+                scenario, dsl, model, ablation, params, cell_key
+            )
+        except Exception as e:
+            # Surface the failing cell up front so the user can see *which*
+            # tuple raised, not just a stack trace from the gather. Re-raise
+            # so the caller's `return_exceptions=True` records it.
+            logging.error(
+                f"  ✗ {model.name} | scenario={scenario.id} dsl={dsl.name} "
+                f"syntax={ablation.syntax} few_shot={ablation.few_shot} "
+                f"cell={cell_key}: {type(e).__name__}: {e}"
+            )
+            raise
         # Queue.put is thread-safe and non-blocking on an unbounded queue, so it
         # is safe to call directly from the event loop. The writer thread is the
         # sole consumer, which serialises file writes.
