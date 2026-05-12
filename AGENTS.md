@@ -111,6 +111,41 @@ Cloud providers read keys from the environment:
 to `.env`. Local models require `ollama serve` on the host; override
 `OLLAMA_HOST` if it isn't `http://localhost:11434`.
 
+Any `provider: openai` entry can carry `base_url` (e.g. `http://0.0.0.0:8000/v1`)
+and `api_key_env` (e.g. `LOCAL_OPENAI_API_KEY`) to redirect through an
+OpenAI-compatible server or router. When `api_key_env` is unset the SDK
+receives the placeholder `"EMPTY"`. The override is only honoured for
+`provider: openai` — Anthropic / Google entries reject it.
+
+For local llama.cpp inference there is a dedicated `kind: local` driver
+(`driver: llamacpp`) with its own `model_id` / optional `base_url` /
+`api_key_env` / `server` fields and its own `per_backend.llamacpp` sweep
+matrix. The wrapper speaks the OpenAI-compatible API exposed by
+`llama-server`.
+
+Two modes, picked by whether `base_url` is set:
+
+- **Managed (default; `base_url` unset).** The pipeline spawns one
+  `llama-server` subprocess per entry on an auto-allocated port for the
+  lifetime of that model's task group, and tears it down when the group
+  finishes. The `server` block on the entry maps to real CLI flags at spawn
+  time (`context_size` → `-c`, `gpu_layers` → `-ngl`, `batch_size` → `-b`,
+  `threads` → `-t`, `flash_attn` → `--flash-attn`, plus `extra_args` as a
+  pass-through list). Each spawned server gets `--parallel
+  concurrency.llamacpp` so internal slots match the worst-case routing.
+  `llama-server` must be on `PATH` (or pin `server.binary` to an absolute
+  path); the binary builds itself, this repo carries no Metal/CUDA/build
+  glue. First-run `-hf <repo>:<quant>` downloads cache to
+  `~/.cache/llama.cpp/`.
+- **External (`base_url` set).** The pipeline does *not* spawn anything;
+  it pre-flights `<base_url>/models` to confirm the configured `model_id`
+  is loaded and then speaks HTTP exactly as today's flow.
+
+`concurrency.llamacpp` is a global in-flight-request cap (one process-wide
+semaphore shared by every llama.cpp entry), the same shape as
+`concurrency.ollama`. Multiple managed entries spawn multiple processes
+simultaneously — size the matrix to your hardware.
+
 ## Resume semantics
 
 Each output row carries a deterministic `cell_key` (hash of model × scenario

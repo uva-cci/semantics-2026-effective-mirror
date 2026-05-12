@@ -15,13 +15,14 @@ import jsonschema.exceptions
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 from pydantic import BaseModel, Field
 
-from src.config import Config, DSLConfig
+from src.config import Config, DSLConfig, ModelConfig
 from src.utils.models import (
     InferenceModel,
     InferenceOutput,
     InferenceParams,
+    acquire_model,
     expand_for_backend,
-    get_model,
+    model_class_for,
 )
 
 PROMPTS_PATH = Path(__file__).resolve().parent / "prompts"
@@ -214,32 +215,44 @@ class MirroringPipeline:
             AblationFlags(syntax=True, few_shot=True),
         ]
 
-        # Build per-model task groups upfront, then dispatch them all under a
-        # single gather. Concurrency is policed by per-backend semaphores keyed
-        # in `get_model`, so cross-model parallelism is safe — and necessary:
-        # a per-model await would serialise every model behind the previous
-        # one, masking the backend-level concurrency cap and stalling the
-        # first datapoints behind one (scenario, model)'s legenda lock.
-        model_runs: list[tuple[InferenceModel, list[Any]]] = []
+        # Plan each model's cells from the cfg + the class-level CONSUMES_*
+        # metadata, *without* instantiating the model. This matters for
+        # managed `driver: llamacpp` entries: instance construction now
+        # depends on a live `llama-server` subprocess, so the resume
+        # accounting and the "everything already complete → skip" decision
+        # must run before we pay the spawn cost. Concurrency is policed by
+        # per-backend semaphores so cross-model parallelism is safe — and
+        # necessary: a per-model await would serialise every model behind
+        # the previous one, masking the backend-level concurrency cap and
+        # stalling the first datapoints behind one (scenario, model)'s
+        # legenda lock.
+        model_runs: list[
+            tuple[
+                ModelConfig,
+                list[tuple[Scenario, DSLConfig, AblationFlags, InferenceParams, str]],
+            ]
+        ] = []
         for model_cfg in self.cfg.models:
             logging.info(f"- Model: {model_cfg.name}")
-            model = get_model(model_cfg, self.cfg.inference.concurrency)
+            model_cls = model_class_for(model_cfg)
 
             # Per-model matrix: each backend only sweeps the axes its API
             # consumes (declared on the InferenceModel subclass). When the
             # entry carries `inference_override`, it short-circuits the
             # global matrix sections it specifies.
             profiles = expand_for_backend(
-                self.cfg.inference, model, model_cfg.inference_override
+                self.cfg.inference, model_cls, model_cfg.inference_override
             )
 
-            cells = [
+            cells: list[
+                tuple[Scenario, DSLConfig, AblationFlags, InferenceParams, str]
+            ] = [
                 (
                     scenario,
                     dsl,
                     abl,
                     params,
-                    compute_cell_key(model.name, scenario.id, dsl.name, abl, params),
+                    compute_cell_key(model_cfg.name, scenario.id, dsl.name, abl, params),
                 )
                 for scenario in self.scenarios
                 for dsl in self.cfg.dsl
@@ -247,78 +260,95 @@ class MirroringPipeline:
                 for params in profiles
             ]
 
-            skipped = sum(1 for *_, key in cells if key in completed)
-            tasks = [
-                self._run_task(scenario, dsl, model, abl, params, cell_key)
-                for scenario, dsl, abl, params, cell_key in cells
-                if cell_key not in completed
-            ]
+            pending = [c for c in cells if c[4] not in completed]
+            skipped = len(cells) - len(pending)
 
             logging.info(
-                f"Dispatching {len(tasks)} datapoint(s) for {model.name} "
+                f"Dispatching {len(pending)} datapoint(s) for {model_cfg.name} "
                 f"(skipped {skipped} already complete)"
             )
-            model_runs.append((model, tasks))
+            model_runs.append((model_cfg, pending))
 
         concurrency_cfg = self.cfg.inference.concurrency
 
         async def _run_one_model(
-            model: InferenceModel, tasks: list[Any], pool_size: int
+            model_cfg: ModelConfig,
+            pending: list[
+                tuple[Scenario, DSLConfig, AblationFlags, InferenceParams, str]
+            ],
+            pool_size: int,
         ) -> None:
-            if not tasks:
-                logging.info(f"✓ Done with {model.name} (no tasks)")
+            # Resume short-circuit: skip *before* `acquire_model` so a fully
+            # already-complete managed-llama.cpp entry doesn't pay the
+            # subprocess spawn + GGUF load cost just to do nothing.
+            if not pending:
+                logging.info(f"✓ Done with {model_cfg.name} (no tasks)")
                 return
 
-            # Bounded worker pool: at most `pool_size` cells in flight
-            # end-to-end. Without this cap, `gather(*tasks)` races every cell
-            # through each phase strictly FIFO via the call semaphore — so
-            # all 3920 encodes process before any decode, and the first
-            # datapoint only lands after the entire encode AND decode phase
-            # completes for every cell. With the cap, one cell completes
-            # fully (~4 LLM calls) before the next starts when pool_size=1.
-            pool_size = max(1, pool_size)
-            pending: asyncio.Queue[Any] = asyncio.Queue()
-            for coro in tasks:
-                pending.put_nowait(coro)
+            async with acquire_model(model_cfg, concurrency_cfg) as model:
+                tasks = [
+                    self._run_task(scenario, dsl, model, abl, params, cell_key)
+                    for scenario, dsl, abl, params, cell_key in pending
+                ]
 
-            failures: list[BaseException] = []
+                # Bounded worker pool: at most `pool_size` cells in flight
+                # end-to-end. Without this cap, `gather(*tasks)` races
+                # every cell through each phase strictly FIFO via the call
+                # semaphore — so all 3920 encodes process before any
+                # decode, and the first datapoint only lands after the
+                # entire encode AND decode phase completes for every
+                # cell. With the cap, one cell completes fully (~4 LLM
+                # calls) before the next starts when pool_size=1.
+                pool_size = max(1, pool_size)
+                queue: asyncio.Queue[Any] = asyncio.Queue()
+                for coro in tasks:
+                    queue.put_nowait(coro)
 
-            async def worker() -> None:
-                while True:
-                    try:
-                        coro = pending.get_nowait()
-                    except asyncio.QueueEmpty:
-                        return
-                    try:
-                        await coro
-                    except Exception as e:
-                        failures.append(e)
+                failures: list[BaseException] = []
 
-            await asyncio.gather(*(worker() for _ in range(pool_size)))
+                async def worker() -> None:
+                    while True:
+                        try:
+                            coro = queue.get_nowait()
+                        except asyncio.QueueEmpty:
+                            return
+                        try:
+                            await coro
+                        except Exception as e:
+                            failures.append(e)
 
-            if failures:
-                logging.warning(
-                    f"✗ {model.name}: {len(failures)}/{len(tasks)} cell(s) "
-                    f"raised; see per-cell ✗ lines above"
+                await asyncio.gather(*(worker() for _ in range(pool_size)))
+
+                if failures:
+                    logging.warning(
+                        f"✗ {model.name}: {len(failures)}/{len(tasks)} cell(s) "
+                        f"raised; see per-cell ✗ lines above"
+                    )
+                logging.info(
+                    f"✓ Done with {model.name}: "
+                    f"{len(tasks) - len(failures)}/{len(tasks)} succeeded"
                 )
-            logging.info(
-                f"✓ Done with {model.name}: "
-                f"{len(tasks) - len(failures)}/{len(tasks)} succeeded"
-            )
 
         # Outer gather tolerates exceptions so a crash inside one model's
-        # group can't kill the rest mid-run.
-        await asyncio.gather(
+        # group can't kill the rest mid-run. Surface what gather swallows so
+        # a failed group (e.g. llama-server crashed at startup) is visible
+        # in the log instead of silently turning into "Experiment completed".
+        results = await asyncio.gather(
             *(
                 _run_one_model(
-                    model,
-                    tasks,
-                    getattr(concurrency_cfg, model.BACKEND_KEY),
+                    model_cfg,
+                    pending,
+                    getattr(concurrency_cfg, model_class_for(model_cfg).BACKEND_KEY),
                 )
-                for model, tasks in model_runs
+                for model_cfg, pending in model_runs
             ),
             return_exceptions=True,
         )
+        for (model_cfg, _), result in zip(model_runs, results):
+            if isinstance(result, BaseException):
+                logging.error(
+                    f"✗ {model_cfg.name}: {type(result).__name__}: {result}"
+                )
 
         self.output.put(None)  # tell the writer to finish
         t.join()

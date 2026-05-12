@@ -18,16 +18,37 @@ class OllamaLocalModelParams(BaseModel):
     model_id: str
 
 
+class LlamaCppServerArgs(BaseModel):
+    """Server-launch knobs for a pipeline-managed `llama-server` process.
+
+    Each non-None field becomes a real CLI flag at spawn time; `None` lets
+    the binary pick its built-in default. Names follow the cross-backend
+    naming rule and are not bound to any one accelerator vocabulary
+    (e.g. `gpu_layers`, not `metal_layers`).
+    """
+    model_config = ConfigDict(extra="forbid")
+    binary: str = "llama-server"          # PATH lookup unless absolute
+    host: str = "127.0.0.1"
+    context_size: int | None = None       # -> -c / --ctx-size
+    gpu_layers: int | None = None         # -> -ngl / --n-gpu-layers
+    batch_size: int | None = None         # -> -b / --batch-size
+    threads: int | None = None            # -> -t / --threads
+    flash_attn: bool | None = None        # -> --flash-attn
+    extra_args: list[str] = []            # last-resort escape hatch
+
+
 class LlamaCppLocalModelParams(BaseModel):
     driver: Literal['llamacpp']
     model_id: str
-    # llama-server URL, e.g. `http://localhost:8080/v1`. Required: the OpenAI
-    # SDK has no localhost convention to fall back on, unlike the Ollama SDK
-    # which honours `OLLAMA_HOST`.
-    base_url: str
+    # When set: the pipeline assumes an externally-managed `llama-server` is
+    # live at this URL (the legacy contract). When unset: the pipeline spawns
+    # and owns a `llama-server` process for the lifetime of this model's
+    # task group, parameterised by `server`.
+    base_url: str | None = None
     # Env var holding the bearer token. When unset the SDK receives "EMPTY",
     # which is fine for the default llama-server config that doesn't validate auth.
     api_key_env: str | None = None
+    server: LlamaCppServerArgs = Field(default_factory=LlamaCppServerArgs)
 
 
 class LocalModelConfig(BaseModel):
@@ -83,18 +104,29 @@ class InferenceConcurrencyConfig(BaseModel):
 
 
 class InferenceConstants(BaseModel):
-    """Fixed values applied to every cell of the matrix for backends that consume them."""
+    """Fixed values applied to every cell of the matrix for backends that consume them.
+
+    `seed` is required (cross-model reproducibility baseline). `top_k` and
+    `repetition_penalty` are optional: leave them unset at the global level
+    if every model that consumes them supplies its own value via
+    `inference_override.constants`. Unset fields surface as `None` on the
+    request and the backend uses its built-in default.
+    """
     model_config = ConfigDict(extra="forbid")
     seed: int
-    top_k: int
-    repetition_penalty: float
+    top_k: int | None = None
+    repetition_penalty: float | None = None
 
 
 class InferenceDefaults(BaseModel):
-    """Sweep axes shared across backends. Each backend pulls only the axes its API supports."""
+    """Sweep axes shared across backends. Each backend pulls only the axes its API supports.
+
+    Both fields default to empty lists so a config whose models all carry a
+    full `inference_override.defaults` can omit the global block entirely.
+    """
     model_config = ConfigDict(extra="forbid")
-    temperature: list[float]
-    top_p: list[float]
+    temperature: list[float] = Field(default_factory=list)
+    top_p: list[float] = Field(default_factory=list)
 
 
 class TruncationProfile(BaseModel):
@@ -132,12 +164,20 @@ class GoogleInferenceConfig(BaseModel):
 
 
 class InferencePerBackend(BaseModel):
+    """Per-backend sweep matrices. Every field defaults to `None`.
+
+    A backend with no global block here is fine as long as every model
+    using that backend carries an `inference_override.per_backend`. With
+    `None` and no override, `expand_for_backend` contributes no per-backend
+    axes for that model — typical for a single-model config that has fully
+    self-described its sweep on the model entry.
+    """
     model_config = ConfigDict(extra="forbid")
-    ollama: OllamaInferenceConfig
-    llamacpp: LlamaCppInferenceConfig
-    openai: OpenAIInferenceConfig
-    anthropic: AnthropicInferenceConfig
-    google: GoogleInferenceConfig
+    ollama: OllamaInferenceConfig | None = None
+    llamacpp: LlamaCppInferenceConfig | None = None
+    openai: OpenAIInferenceConfig | None = None
+    anthropic: AnthropicInferenceConfig | None = None
+    google: GoogleInferenceConfig | None = None
 
 
 class InferenceParamsConfig(BaseModel):
@@ -145,8 +185,8 @@ class InferenceParamsConfig(BaseModel):
     concurrency: InferenceConcurrencyConfig = Field(
         default_factory=InferenceConcurrencyConfig)
     constants: InferenceConstants
-    defaults: InferenceDefaults
-    per_backend: InferencePerBackend
+    defaults: InferenceDefaults = Field(default_factory=InferenceDefaults)
+    per_backend: InferencePerBackend = Field(default_factory=InferencePerBackend)
 
 
 class OverrideableConstants(BaseModel):

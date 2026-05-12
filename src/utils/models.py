@@ -1,9 +1,10 @@
 import asyncio
+import contextlib
 import itertools
 import logging
 import os
 from abc import ABC, abstractmethod
-from typing import Any, Literal, cast, override
+from typing import Any, AsyncIterator, Literal, cast, override
 
 import anthropic
 import backoff
@@ -31,6 +32,7 @@ from src.config import (
     ModelInferenceOverride,
     OllamaLocalModelParams,
 )
+from src.utils.llama_server import LlamaServerManager
 
 _semaphores: dict[str, asyncio.Semaphore] = {}
 
@@ -221,9 +223,10 @@ class LlamaCppInferenceModel(InferenceModel):
     The transport reuses the OpenAI Python SDK, but the sweep surface mirrors
     Ollama's: open-weights samplers (`min_p`, `top_k`, `repeat_penalty`) are
     pushed through the SDK's `extra_body` escape hatch, which forwards
-    non-standard fields to the server unchanged. Server lifecycle and GGUF
-    fetching (e.g. `llama-server -hf Qwen/Qwen3-30B-A3B-GGUF:Q4_K_M`) are
-    operator-side; this class only speaks HTTP to an already-running endpoint.
+    non-standard fields to the server unchanged. Server lifecycle is owned
+    by `acquire_model` — either via `LlamaServerManager` (managed mode) or
+    by trusting an externally-launched server when `cfg.base_url` is set.
+    Readiness/model-id checks live in those callers, not here.
     """
 
     BACKEND_KEY = "llamacpp"
@@ -231,7 +234,11 @@ class LlamaCppInferenceModel(InferenceModel):
     CONSUMES_CONSTANTS = frozenset({"seed", "top_k", "repetition_penalty"})
 
     def __init__(
-        self, name: str, cfg: LlamaCppLocalModelParams, sem: asyncio.Semaphore
+        self,
+        name: str,
+        cfg: LlamaCppLocalModelParams,
+        base_url: str,
+        sem: asyncio.Semaphore,
     ) -> None:
         super().__init__(name, sem)
         self.cfg = cfg
@@ -239,26 +246,7 @@ class LlamaCppInferenceModel(InferenceModel):
         api_key = (
             os.environ[cfg.api_key_env] if cfg.api_key_env is not None else "EMPTY"
         )
-        self._client = AsyncOpenAI(base_url=cfg.base_url, api_key=api_key)
-
-        # Pre-flight: hit `/v1/models` synchronously so a forgotten
-        # `llama-server` launch or a `model_id` that doesn't match what the
-        # server registered fails at construction with an actionable message,
-        # not mid-matrix.
-        preflight = openai.OpenAI(base_url=cfg.base_url, api_key=api_key)
-        try:
-            served = {m.id for m in preflight.models.list().data}
-        except openai.OpenAIError as e:
-            raise RuntimeError(
-                f"llama.cpp pre-flight failed for {cfg.base_url}: {e}. "
-                "Is `llama-server` running and reachable?"
-            ) from e
-        if cfg.model_id not in served:
-            raise ValueError(
-                f"Model {cfg.model_id!r} not loaded on llama-server at "
-                f"{cfg.base_url}; server reports: {sorted(served)}. Launch "
-                "`llama-server` so its registered model id matches `model_id`."
-            )
+        self._client = AsyncOpenAI(base_url=base_url, api_key=api_key)
 
     @override
     async def generate(self, prompt: str, params: InferenceParams) -> InferenceOutput:
@@ -546,15 +534,75 @@ class GoogleInferenceModel(InferenceModel):
         )
 
 
+def _llamacpp_preflight_external(
+    cfg: LlamaCppLocalModelParams, base_url: str
+) -> None:
+    """Validate that an externally-managed llama-server is up and serving the right model.
+
+    Mirrors the readiness check `LlamaServerManager` runs for managed mode,
+    so the failure shape is identical regardless of who owns the process.
+    """
+    api_key = (
+        os.environ[cfg.api_key_env] if cfg.api_key_env is not None else "EMPTY"
+    )
+    preflight = openai.OpenAI(base_url=base_url, api_key=api_key)
+    try:
+        served = {m.id for m in preflight.models.list().data}
+    except openai.OpenAIError as e:
+        raise RuntimeError(
+            f"llama.cpp pre-flight failed for {base_url}: {e}. "
+            "Is `llama-server` running and reachable?"
+        ) from e
+    if cfg.model_id not in served:
+        raise ValueError(
+            f"Model {cfg.model_id!r} not loaded on llama-server at "
+            f"{base_url}; server reports: {sorted(served)}. Launch "
+            "`llama-server` so its registered model id matches `model_id`."
+        )
+
+
+@contextlib.asynccontextmanager
+async def acquire_model(
+    cfg: ModelConfig, concurrency: InferenceConcurrencyConfig
+) -> AsyncIterator[InferenceModel]:
+    """Acquire an inference model for a single per-model task group.
+
+    This is the uniform entry point used by the pipeline. For most backends
+    it is a no-op wrapper around an instance constructed up front. For
+    `driver: llamacpp` in managed mode (no `base_url`) it owns a
+    `llama-server` subprocess for the duration of the `async with` block;
+    for `driver: llamacpp` in external mode (`base_url` set) it runs the
+    pre-flight on entry.
+
+    The per-backend semaphore returned by `_get_semaphore` is shared across
+    all instances of the same backend, so multiple model entries pointing
+    at the same backend never exceed that backend's in-flight cap
+    collectively.
+    """
+    if isinstance(cfg.meta, LocalModelConfig) and isinstance(
+        cfg.meta.params, LlamaCppLocalModelParams
+    ):
+        params = cfg.meta.params
+        sem = _get_semaphore("llamacpp", concurrency.llamacpp)
+        if params.base_url is not None:
+            _llamacpp_preflight_external(params, params.base_url)
+            yield LlamaCppInferenceModel(cfg.name, params, params.base_url, sem)
+            return
+        async with LlamaServerManager(params, concurrency.llamacpp) as base_url:
+            yield LlamaCppInferenceModel(cfg.name, params, base_url, sem)
+        return
+
+    yield get_model(cfg, concurrency)
+
+
 def get_model(
     cfg: ModelConfig, concurrency: InferenceConcurrencyConfig
 ) -> InferenceModel:
-    """Return an inference model instance.
+    """Return an inference model instance for backends with no lifecycle.
 
-    The semaphore enforcing concurrency for this model is shared across all
-    instances of the same backend (driver for local, provider for cloud), so
-    multiple model entries pointing at the same backend never exceed that
-    backend's cap collectively.
+    Used by `acquire_model` for everything except `driver: llamacpp` (which
+    needs an async context to own its server). Direct callers should prefer
+    `acquire_model`.
     """
     match cfg.meta.kind:
         case "local":
@@ -565,11 +613,10 @@ def get_model(
                     sem = _get_semaphore("ollama", concurrency.ollama)
                     return OllamaInferenceModel(cfg.name, ollama_params, sem)
                 case "llamacpp":
-                    llamacpp_params = cast(
-                        LlamaCppLocalModelParams, local_meta.params
+                    raise RuntimeError(
+                        "llamacpp models must be acquired via `acquire_model`, "
+                        "not `get_model`."
                     )
-                    sem = _get_semaphore("llamacpp", concurrency.llamacpp)
-                    return LlamaCppInferenceModel(cfg.name, llamacpp_params, sem)
         case "cloud":
             cloud_meta = cast(CloudModelConfig, cfg.meta)
             match cloud_meta.provider:
@@ -587,18 +634,48 @@ def get_model(
     raise ValueError()
 
 
+def model_class_for(cfg: ModelConfig) -> type[InferenceModel]:
+    """Return the `InferenceModel` subclass that will handle this entry.
+
+    Lets callers read `BACKEND_KEY` / `CONSUMES_*` (class-level metadata)
+    without paying for instance construction — important for managed
+    `llama.cpp`, where instantiation requires a live server.
+    """
+    match cfg.meta.kind:
+        case "local":
+            local_meta = cast(LocalModelConfig, cfg.meta)
+            match local_meta.params.driver:
+                case "ollama":
+                    return OllamaInferenceModel
+                case "llamacpp":
+                    return LlamaCppInferenceModel
+        case "cloud":
+            cloud_meta = cast(CloudModelConfig, cfg.meta)
+            match cloud_meta.provider:
+                case "openai":
+                    return OpenAIInferenceModel
+                case "anthropic":
+                    return AnthropicInferenceModel
+                case "google":
+                    return GoogleInferenceModel
+                case _:
+                    raise ValueError(f"Unknown provider {cloud_meta.provider}")
+    raise ValueError()
+
+
 def expand_for_backend(
     cfg: InferenceParamsConfig,
-    model: InferenceModel,
+    model_cls: type[InferenceModel],
     override: ModelInferenceOverride | None = None,
 ) -> list[InferenceParams]:
     """Materialise the per-model sweep matrix as a list of `InferenceParams`.
 
     The YAML's `defaults` and `per_backend.<key>` blocks are projected through
-    `model.CONSUMES_DEFAULTS` / `model.CONSUMES_CONSTANTS` so each backend only
-    sweeps axes its API actually consumes. Constants are stamped onto every
-    cell. Ollama's `truncation` profiles are a tagged tuple axis: each entry
-    contributes both `top_p` and `min_p` (and a label) as a single cell.
+    `model_cls.CONSUMES_DEFAULTS` / `model_cls.CONSUMES_CONSTANTS` so each
+    backend only sweeps axes its API actually consumes. Constants are stamped
+    onto every cell. Ollama's `truncation` profiles are a tagged tuple axis:
+    each entry contributes both `top_p` and `min_p` (and a label) as a single
+    cell.
 
     `override`, when supplied, replaces individual sections section-by-section:
     a non-None `override.defaults` swaps in for the global defaults; a
@@ -606,6 +683,9 @@ def expand_for_backend(
     non-None fields on `override.constants` swap in per-constant. `seed` is
     deliberately not overridable — it stays anchored to the global value so
     every cell across every model shares one reproducibility baseline.
+
+    Takes the model class (not an instance) so it can plan cells before
+    expensive lifecycle work like spawning a `llama-server` subprocess.
     """
     sweep_axes: list[list[tuple[str, Any]]] = []
 
@@ -613,7 +693,7 @@ def expand_for_backend(
         defaults_dump = override.defaults.model_dump()
     else:
         defaults_dump = cfg.defaults.model_dump()
-    for axis in model.CONSUMES_DEFAULTS:
+    for axis in model_cls.CONSUMES_DEFAULTS:
         sweep_axes.append([(axis, v) for v in defaults_dump[axis]])
 
     if override is not None and override.per_backend is not None:
@@ -622,7 +702,11 @@ def expand_for_backend(
         # global path produces via `.model_dump()`.
         pb = override.per_backend
     else:
-        pb = getattr(cfg.per_backend, model.BACKEND_KEY).model_dump()
+        pb_obj = getattr(cfg.per_backend, model_cls.BACKEND_KEY)
+        # `None` means the global config doesn't declare a matrix for this
+        # backend — legitimate when every model using it overrides
+        # per_backend on its own entry. Treat as no per-backend axes.
+        pb = pb_obj.model_dump() if pb_obj is not None else {}
     for axis, values in pb.items():
         if axis == "truncation":
             sweep_axes.append([("__truncation__", profile) for profile in values])
@@ -639,7 +723,7 @@ def expand_for_backend(
                 fields["truncation_name"] = value["name"]
             else:
                 fields[axis] = value
-        for c in model.CONSUMES_CONSTANTS:
+        for c in model_cls.CONSUMES_CONSTANTS:
             override_val: Any = None
             if (
                 c != "seed"
