@@ -1,247 +1,417 @@
 [
   {
-    "id": "scenario-000",
+    "id": "sartor-000",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "it is obligatory that j takes security measures"
   },
   {
-    "id": "scenario-001",
+    "id": "sartor-001",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "it is obligatory that j brings it about that k's personal data are cancelled"
   },
   {
-    "id": "scenario-002",
+    "id": "sartor-002",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "it is forbidden that j downloads copyrighted work"
   },
   {
-    "id": "scenario-003",
+    "id": "sartor-003",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "it is permitted that Tony runs MySoft"
   },
   {
-    "id": "scenario-004",
+    "id": "sartor-004",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "it is permitted that Tony brings it about that MySoft is installed in three computers"
   },
   {
-    "id": "scenario-005",
+    "id": "sartor-005",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "in the UK, for a girl going to school, it is facultative to wear the veil"
   },
   {
-    "id": "scenario-006",
+    "id": "sartor-006",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "it is obligatory that Tom pays Mary 1000 euros, in order to advance Mary's interests"
   },
   {
-    "id": "scenario-007",
+    "id": "sartor-007",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "it is obligatory that Tom pays John 1000 euros, in order to advance Mary's interests"
   },
   {
-    "id": "scenario-008",
+    "id": "sartor-008",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "it is obligatory, toward Mary, that Tom pays 1,000 euros to Mary"
   },
   {
-    "id": "scenario-009",
+    "id": "sartor-009",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "it is obligatory, toward Tom, that Mary does not communicate to others Tom's trade secrets"
   },
   {
-    "id": "scenario-010",
+    "id": "sartor-010",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "it is permitted, toward Tom, that Mary erects a building up to 15 meters high"
   },
   {
-    "id": "scenario-011",
+    "id": "sartor-011",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "it is obligatory, toward Mary, that Tom pays 1,000euros to John"
   },
   {
-    "id": "scenario-012",
+    "id": "sartor-012",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "Mary has an erga-omnes obligative right that nobody copies her book."
   },
   {
-    "id": "scenario-013",
+    "id": "sartor-013",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "If y is x' s employee, then y has an obligative right that x does not adopt any decision impairing y' s+ employment situation on the basis of y' s race or sex"
   },
   {
-    "id": "scenario-014",
+    "id": "sartor-014",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "Anyone below 18 years of age is forbidden to buy alcoholic drinks."
   },
   {
-    "id": "scenario-015",
+    "id": "sartor-015",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "If Tom does not deliver the merchandise on time, then Tom becomes obliged to pay a penalty of 1,000."
   },
   {
-    "id": "scenario-016",
+    "id": "sartor-016",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "If Mary renounces the payment of the penalty, then Tom ceases to be obliged to pay it."
   },
   {
-    "id": "scenario-017",
+    "id": "sartor-017",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "If Tom is inside a mosque, then Tom is forbidden to wear shoes."
   },
   {
-    "id": "scenario-018",
+    "id": "sartor-018",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "If Tom was born in Italy, then Tom becomes an Italian citizen."
   },
   {
-    "id": "scenario-019",
+    "id": "sartor-019",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "If Tom acquires another citizenship, then Tom ceases to be an Italian citizen."
   },
   {
-    "id": "scenario-020",
+    "id": "sartor-020",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "If Tom and Lisa agree to create company LegalSoft, then the company LegalSoft comes into existence."
   },
   {
-    "id": "scenario-021",
+    "id": "sartor-021",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "If Tom and Lisa agree to terminate company LegalSoft, then the company LegalSoft ceases to exist."
   },
   {
-    "id": "scenario-022",
+    "id": "sartor-022",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "If an object is permanently attached to the soil, then the object is an immovable good."
   },
   {
-    "id": "scenario-023",
+    "id": "sartor-023",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "If Tom drives while intoxicated, then Tom commits a criminal offence."
   },
   {
-    "id": "scenario-024",
+    "id": "sartor-024",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "For any persons x and y, and amount w, if x causes against y an illegal damage worth w, then the obligation that x pays compensation w to y starts"
   },
   {
-    "id": "scenario-025",
+    "id": "sartor-025",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "Any piece of land, water source, tree, building, or entity which is anyway permanently attached to the land is an immovable good."
   },
   {
-    "id": "scenario-026",
+    "id": "sartor-026",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "If x makes an offer to the public, containing all terms of the contract it concerns, x makes a contractual offer."
   },
   {
-    "id": "scenario-027",
+    "id": "sartor-027",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "Whoever appropriates the property of others is going to be punished as a thief. The appropriator must have the intention of getting permanent possession of the stolen object. A thief does not have to intend (or need not intend) to appropriate the stolen object directly; the thief can also have the intention to provide possession to another."
   },
   {
-    "id": "scenario-028",
+    "id": "sartor-028",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "If one wants to achieve the conditioned legal result in that way (that is, as resulting from a certain normative antecedent), one must bear the cost (burden or onus) of realising the additional condition."
   },
   {
-    "id": "scenario-029",
+    "id": "sartor-029",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "Wild beasts, birds, fish, that is, all animals, which live either in the sea, the air, or on the earth, so soon as they are taken by any one, immediately become property of their captor."
   },
   {
-    "id": "scenario-030",
+    "id": "sartor-030",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "For any person x and any animal y, if y does not belong to anybody, then x has the potestative-right to start x's ownership of the animal, by capturing y."
   },
   {
-    "id": "scenario-031",
+    "id": "sartor-031",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "For any person x and any object y, if y is an original work, then x has the potestative-right to start x's copyright over y, by creating y."
   },
   {
-    "id": "scenario-032",
+    "id": "sartor-032",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "If j has an obligative right to an action A then j has the potestative right to activate a sanction for the non-performance of A."
   },
   {
-    "id": "scenario-033",
+    "id": "sartor-033",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "One is permitted to reproduce a protected work, but the author is entitled to a royalty for the reproduction of his or her work."
   },
   {
-    "id": "scenario-034",
+    "id": "sartor-034",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "Through this contact, j's house is transferred to k for the price of 1,000,000 euros."
   },
   {
-    "id": "scenario-035",
+    "id": "sartor-035",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "You are free from your obligation to me."
   },
   {
-    "id": "scenario-036",
+    "id": "sartor-036",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "Whenever you get a good mark, I will be obliged to give you 10 euros."
   },
   {
-    "id": "scenario-037",
+    "id": "sartor-037",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "It is forbidden to smoke in public spaces."
   },
   {
-    "id": "scenario-038",
+    "id": "sartor-038",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "For any p, if Parliament declares p, then Parliament brings it about that p."
   },
   {
-    "id": "scenario-039",
+    "id": "sartor-039",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "Use of this Web site constitutes acceptance of our Agreement and Privacy Policy."
   },
   {
-    "id": "scenario-040",
+    "id": "sartor-040",
     "source": { "doi": "https://doi.org/10.1007/s10506-006-9009-x" },
     "description": "By breaking the seal on this disk envelope you accept all the terms of the follow}ing licence"
   },
   {
-    "id": "scenario-041",
+    "id": "odrl-001",
     "source": { "url": "https://w3c.github.io/odrl/bp/" },
     "description": "Movie 9898 can be used"
   },
   {
-    "id": "scenario-042",
+    "id": "odrl-002",
     "source": { "url": "https://w3c.github.io/odrl/bp/" },
     "description": "John can use Movie 9898"
   },
   {
-    "id": "scenario-043",
+    "id": "odrl-003",
     "source": { "url": "https://w3c.github.io/odrl/bp/" },
     "description": "Movie 9898 can be used in Germany"
   },
   {
-    "id": "scenario-044",
+    "id": "odrl-004",
     "source": { "url": "https://w3c.github.io/odrl/bp/" },
     "description": "Movie 9898 can be used after 2019"
   },
   {
-    "id": "scenario-045",
+    "id": "odrl-005",
     "source": { "url": "https://w3c.github.io/odrl/bp/" },
     "description": "Movie 9898 can be used in Germany after 2019"
   },
   {
-    "id": "scenario-046",
+    "id": "odrl-006",
     "source": { "url": "https://w3c.github.io/odrl/bp/" },
     "description": "John must play Movie 9898"
   },
   {
-    "id": "scenario-047",
+    "id": "odrl-007",
     "source": { "url": "https://w3c.github.io/odrl/bp/" },
     "description": "John is prohibited play movie 9898"
   },
   {
-    "id": "scenario-048",
+    "id": "odrl-008",
     "source": { "url": "https://w3c.github.io/odrl/bp/" },
     "description": "Alice can use Asset 1, but Bob can't"
+  },
+  {
+    "id": "pmrg-001",
+    "source": { "url": "localhost" },
+    "description": "You have to do your homeworks."
+  },
+  {
+    "id": "pmrg-002",
+    "source": { "url": "localhost" },
+    "description": "If you don’t do your homeworks, you will be punished."
+  },
+  {
+    "id": "pmrg-003",
+    "source": { "url": "localhost" },
+    "description": "If you don’t do your homeworks, mother must punish you."
+  },
+  {
+    "id": "pmrg-004",
+    "source": { "url": "localhost" },
+    "description": "If your mother sees that you haven’t done your homerworks, she will prohibit you from playing."
+  },
+  {
+    "id": "pmrg-005",
+    "source": { "url": "localhost" },
+    "description": "John can not smoke."
+  },
+  {
+    "id": "pmrg-006",
+    "source": { "url": "localhost" },
+    "description": "John can smoke if he is outside."
+  },
+  {
+    "id": "pmrg-007",
+    "source": { "url": "localhost" },
+    "description": "Paul has to give 100 euros to Mary."
+  },
+  {
+    "id": "pmrg-008",
+    "source": { "url": "localhost" },
+    "description": "Anne can ask Paul to give Mary 100 euro."
+  },
+  {
+    "id": "pmrg-009",
+    "source": { "url": "localhost" },
+    "description": "Paul has to give 100 euros to Mary on behalf of John."
+  },
+  {
+    "id": "pmrg-010",
+    "source": { "url": "localhost" },
+    "description": "John can ask Paul to give Mary the 100 euros he had to give to him"
+  },
+  {
+    "id": "pmrg-011",
+    "source": { "url": "localhost" },
+    "description": "You have to pay to see the film."
+  },
+  {
+    "id": "pmrg-012",
+    "source": { "url": "localhost" },
+    "description": "You have to pay to obtain the certificate"
+  },
+  {
+    "id": "pmrg-013",
+    "source": { "url": "localhost" },
+    "description": "If you smoke, you have to pay a fine."
+  },
+  {
+    "id": "pmrg-014",
+    "source": { "url": "localhost" },
+    "description": "Data processing must be conducted on the basis of consent."
+  },
+  {
+    "id": "SPINdle-0",
+    "source": "data/SPINdle/examples.json",
+    "description": "Article 1. The Licensor grants the Licensee a licence to evaluate the Product.\nArticle 2. The Licensee must not publish the results of the evaluation of the\nProduct without the approval of the Licensor. If the Licensee publishes results\nof the evaluation of the Product without approval from the Licensor, the mate-\nrial must be removed.\nArticle 3. The Licensee must not publish comments about the evaluation of the\nProduct, unless the Licensee is permitted to publish the results of the evaluation.\nArticle 4. If the Licensee is commissioned to perform an independent evaluation\nof the Product, then the Licensee has the obligation to publish the evaluation"
+  },
+  {
+    "id": "catala-0",
+    "source": "data/catala/examples.json",
+    "description": "La r\u00e9serve h\u00e9r\u00e9ditaire est la part des biens et droits successoraux dont la\nloi assure la d\u00e9volution libre de charges \u00e0 certains h\u00e9ritiers dits r\u00e9servataires,\ns'ils sont appel\u00e9s \u00e0 la succession et s'ils l'acceptent.\nLa quotit\u00e9 disponible est la part des biens et droits successoraux qui n'est\npas r\u00e9serv\u00e9e par la loi et dont le d\u00e9funt a pu disposer librement par des\nlib\u00e9ralit\u00e9s."
+  },
+  {
+    "id": "catala-1",
+    "source": "data/catala/examples.json",
+    "description": "Les lib\u00e9ralit\u00e9s, soit par actes entre vifs, soit par testament, ne pourront\nexc\u00e9der la moiti\u00e9 des biens du disposant, s'il ne laisse \u00e0 son d\u00e9c\u00e8s qu'un\nenfant ; le tiers, s'il laisse deux enfants ; le quart, s'il en laisse trois\nou un plus grand nombre."
+  },
+  {
+    "id": "catala-2",
+    "source": "data/catala/examples.json",
+    "description": "L'enfant qui renonce \u00e0 la succession n'est compris dans le nombre d'enfants\nlaiss\u00e9s par le d\u00e9funt que s'il est repr\u00e9sent\u00e9 ou s'il est tenu au rapport\nd'une lib\u00e9ralit\u00e9."
+  },
+  {
+    "id": "eflint-0",
+    "source": "data/eflint/examples.json",
+    "description": "A buyer has the duty to pay the seller a given amount defined by an interest rate that increases the cost by 1 if payment is expired. The seller has the duty to deliver the item."
+  },
+  {
+    "id": "eflint-1",
+    "source": "data/eflint/examples.json",
+    "description": "A citizen (either Alice, Bob, or Chloe) can apply for a permit type (either solar panels or new construction) to a minister (which is now John). The minsiter can deny the application if the requested permit is for new constructions, otherwise it can approve the application creating a permit for that citizen."
+  },
+  {
+    "id": "eflint-2",
+    "source": "data/eflint/examples.json",
+    "description": "A child can ask for help with their homework to their legal parent (either a natural parent or an adoptive parent). A parent has the duty of helping the child if they requested for help. The duty is violated if the homework is due."
+  },
+  {
+    "id": "LegalRuleML-0",
+    "source": "data/LegalRuleML/examples.json",
+    "description": "Goods marked as \u201cSpecial Order\u201d are subject to a 5% surcharge. Premium customers are exempt from special order surcharge."
+  },
+  {
+    "id": "LegalRuleML-1",
+    "source": "data/LegalRuleML/examples.json",
+    "description": "John Doe is a premium customer."
+  },
+  {
+    "id": "Symboleo-0",
+    "source": "data/Symboleo/examples.json",
+    "description": "This agreement is entered into as of the date <effDate>, between <party1> as Seller with the address <retAdd>, and <party2> as Buyer with the address <delAdd>.\n1) Payment & Delivery\n1.1 Seller shall sell an amount of <qnt> meat with <qlt> quality (\u201cgoods\u201d) to the Buyer.\n1.2 Title in the Goods shall not pass on to the Buyer until payment of the amount owed has been made in full.\n1.3 The Seller shall deliver the Order in one delivery within <delDueDateDays> days to the Buyer at its warehouse.\n1.4 The Buyer shall pay <amt> (\u201camount\u201d) in <curr> (\u201ccurrency\u201d) to the Seller before <payDueDate>.\n1.5 In the event of late payment of the amount owed due, the Buyer shall pay interests equal to <intRate>% of the amount owed, and the Seller may suspend performance of all of its obligations under the agreement until payment of amounts due has been received in full.\n2) Assignment\n2.1 The rights and obligations are not assignable by Buyer.\n3) Termination\n3.1 Any delay in delivery of the goods will not entitle the Buyer to terminate the Contract unless such delay exceeds 10 Days.\n4) Confidentiality\n4.1 Both Seller and Buyer must keep the contents of this contract confidential during the execution of the contract and six months after the termination of the contract"
+  },
+  {
+    "id": "dcpl-0",
+    "source": "data/dcpl/examples.json",
+    "description": "During an auction, if a hand is raised, a bet comes to exist."
+  },
+  {
+    "id": "dcpl-1",
+    "source": "data/dcpl/examples.json",
+    "description": "A priest has the power to make John and Paul married by marrying them."
+  },
+  {
+    "id": "dcpl-2",
+    "source": "data/dcpl/examples.json",
+    "description": "John has towards the university a duty to teach students. John violates this duty if he is not online."
+  },
+  {
+    "id": "SBVR-0",
+    "source": "data/SBVR/examples.json",
+    "description": "BIKE RENTAL CONTRACT\n1. Term.\nThis Agreement shall commence on the day the Borrower takes possession of the Bike and remain in full force and effect until the Bike is returned to Lender at location __________. Borrower shall return the Bike __________ hours after the rental date and will pay Euro __________ in advance where half of the amount is of surcharge for late return or loss or damage of the Bike.\n2. Payment.\nBorrower shall pay on __________ the amount specified in Article 1. The Rental Date starts at the same time.\n3. Return of the Bike.\nRenter shall return the Bike on the Rental Date specified in Article 2 plus the hours specified in Article 1 at location specified in Article 1. If the Bike is not returned at the agreed location or it is damaged or loss, Lender reserves the right to take any action necessary to get reimbursed.\n4. Termination.\nThis Agreement shall terminate on the date specified in Article 3\n5. Disputes.\nEvery dispute arising from the relationship governed by the above general rental conditions will be managed by the Court the Lender company is based, which will decide compensations for Lender and Borrower."
+  },
+  {
+    "id": "odrl-0",
+    "source": "data/odrl/examples.json",
+    "description": "A policy that grants a permission to reproduce an asset and prohibits modification of that same asset."
+  },
+  {
+    "id": "odrl-1",
+    "source": "data/odrl/examples.json",
+    "description": "An offer policy giving permission to play and copy music with associated duties (compensation constraints) on those permissions."
+  },
+  {
+    "id": "odrl-2",
+    "source": "data/odrl/examples.json",
+    "description": "An agreement granting a party permission to play and copy music with duties requiring payment, including count constraint on copy."
+  },
+  {
+    "id": "NPLs-0",
+    "source": "data/NPLs/examples.json",
+    "description": "Norm n1: If a statement of value X is made, and the value is superior than 5, Alice has 3 seconds to achieve the state b, or else sr1 applies, for value X.\nNorm n2: If an agent A has a fine sanction of a certain value X, and there is a certain penalty rate C, Bob is obliged to apply a fine upon that agent A of X*C in 2 seconds, otherwise sr2 applies.\nSanction-rule sr1 upon an agent A for value X: if A is not in an emergency, it is sanctioned with a fine for the value X.\nSanction-rule sr2: Bob receives a sanction to be removed from the system."
+  },
+  {
+    "id": "PROLEG-0",
+    "source": "data/PROLEG/examples.json",
+    "description": "Article 1. The Licensor grants the Licensee a licence to evaluate the Product.\nArticle 2. The Licensee must not publish the results of the evaluation of the\nProduct without the approval of the Licensor. If the Licensee publishes results\nof the evaluation of the Product without approval from the Licensor, the mate-\nrial must be removed.\nArticle 3. The Licensee must not publish comments about the evaluation of the\nProduct, unless the Licensee is permitted to publish the results of the evaluation.\nArticle 4. If the Licensee is commissioned to perform an independent evaluation\nof the Product, then the Licensee has the obligation to publish the evaluation"
+  },
+  {
+    "id": "stipula-0",
+    "source": "data/stipula/examples.json",
+    "description": "BIKE RENTAL CONTRACT\n1. Term.\nThis Agreement shall commence on the day the Borrower takes possession of the Bike and remain in full force and effect until the Bike is returned to Lender at location __________. Borrower shall return the Bike __________ hours after the rental date and will pay Euro __________ in advance where half of the amount is of surcharge for late return or loss or damage of the Bike.\n2. Payment.\nBorrower shall pay on __________ the amount specified in Article 1. The Rental Date starts at the same time.\n3. Return of the Bike.\nRenter shall return the Bike on the Rental Date specified in Article 2 plus the hours specified in Article 1 at location specified in Article 1. If the Bike is not returned at the agreed location or it is damaged or loss, Lender reserves the right to take any action necessary to get reimbursed.\n4. Termination.\nThis Agreement shall terminate on the date specified in Article 3\n5. Disputes.\nEvery dispute arising from the relationship governed by the above general rental conditions will be managed by the Court the Lender company is based, which will decide compensations for Lender and Borrower."
   }
 ]
