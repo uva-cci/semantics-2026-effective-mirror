@@ -14,51 +14,47 @@ dsl:
     schema: inputs/dsl/odrl/schema.json
 
 models:
-  # --- LOCAL MODELS ---
-  - name: qwen3.6-moe
+  - name: qwen3-30b-a3b-q4
     meta:
       kind: local
       params:
-        driver: ollama
-        model_id: qwen3.6:35b-a3b-q4_K_M
+        driver: llamacpp
+        model_id: Qwen/Qwen3-30B-A3B-GGUF:Q4_K_M
+        server:
+          context_size: 32768
+          gpu_layers: 999
+          flash_attn: true
+    # Qwen-recommended sampling profile.
+    inference_override:
+      defaults:
+        temperature: [0.6]
+      per_backend:
+        truncation:
+          - { name: "qwen_recommended", top_p: 0.95, min_p: 0.05 }
+      constants:
+        top_k: 20
 
-  - name: gemma4-e4b
+  - name: gpt-oss-20b-q4
     meta:
       kind: local
       params:
-        driver: ollama
-        model_id: gemma4:e4b-it-q4_K_M
-
-  # --- CLOUD MODELS ---
-  - name: gpt-5.5-pro
-    meta:
-      kind: cloud
-      provider: openai
-      model_id: gpt-5.5-2026-04-23
-
-  - name: gpt-5.5-flash
-    meta:
-      kind: cloud
-      provider: openai
-      model_id: gpt-5.5-flash-2026-04-23
-
-  - name: claude-opus-4.7
-    meta:
-      kind: cloud
-      provider: anthropic
-      model_id: claude-opus-4-7-20260416
-
-  - name: gemini-3.1-pro
-    meta:
-      kind: cloud
-      provider: google
-      model_id: gemini-3.1-pro-preview
-
-  - name: gemini-3-flash
-    meta:
-      kind: cloud
-      provider: google
-      model_id: gemini-3-flash-preview
+        driver: llamacpp
+        model_id: unsloth/gpt-oss-20b-GGUF
+        server:
+          context_size: 32768
+          gpu_layers: 999
+          flash_attn: true
+    # OpenAI-recommended sampling for gpt-oss: temperature=1.0, top_p=1.0
+    # (full distribution, no truncation). top_k=0 disables top-k filtering
+    # in llama.cpp, which otherwise defaults to 40.
+    inference_override:
+      defaults:
+        temperature: [1.0]
+      per_backend:
+        truncation:
+          - { name: "gpt_oss_recommended", top_p: 1.0, min_p: null }
+      constants:
+        top_k: 0
 
 encoding:
   name: pplx-embed-v1-0.6b
@@ -66,31 +62,6 @@ encoding:
 
 inference:
   concurrency:
-    ollama: 1
-    openai: 8
-    anthropic: 4
-    google: 4
-
+    llamacpp: 1
   constants:
     seed: 42
-    top_k: 0
-    repetition_penalty: 1.1
-
-  defaults:
-    temperature: [0.0, 0.4, 0.7, 1.0, 1.2]
-    top_p: [0.9, 1.0]
-
-  per_backend:
-    ollama:
-      truncation:
-        - { name: "top_p_baseline", top_p: 0.9, min_p: null }
-        - { name: "min_p_low",      top_p: 1.0, min_p: 0.05 }
-        - { name: "min_p_med",      top_p: 1.0, min_p: 0.10 }
-        - { name: "min_p_high",     top_p: 1.0, min_p: 0.20 }
-    openai:
-      reasoning_effort: ["low", "medium", "high", "xhigh"]
-      text_verbosity: ["low", "medium"]
-    anthropic:
-      reasoning_budget: [1024, 4096, 16384, 32768]
-    google:
-      reasoning_budget: [1024, 4096, 16384, 32768]

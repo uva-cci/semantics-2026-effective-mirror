@@ -26,9 +26,6 @@ encoding:
 inference:
   concurrency:
     ollama: 1
-    openai: 8
-    anthropic: 4
-    google: 4
 
   constants:
     seed: 42
@@ -43,10 +40,3 @@ inference:
     ollama:
       truncation:
         - { name: "top_p_baseline", top_p: 1.0, min_p: null }
-    openai:
-      reasoning_effort: ["low"]
-      text_verbosity: ["low"]
-    anthropic:
-      reasoning_budget: [1024]
-    google:
-      reasoning_budget: [1024]
