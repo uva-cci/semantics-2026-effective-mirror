@@ -39,7 +39,7 @@ models:
       kind: local
       params:
         driver: llamacpp
-        model_id: unsloth/gpt-oss-20b-GGUF
+        model_id: unsloth/gpt-oss-20b-GGUF:Q4_K_M
         server:
           context_size: 32768
           gpu_layers: 999
