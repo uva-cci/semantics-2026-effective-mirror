@@ -38,7 +38,7 @@ Any `provider: openai` entry can additionally set `base_url` and (optionally) `a
 
 Local Ollama models require `ollama serve` running on the host. By default the Ollama SDK connects to `http://localhost:11434`; override with `OLLAMA_HOST` if needed.
 
-For local `driver: llamacpp` entries the pipeline spawns and owns one `llama-server` subprocess per entry by default — the `server:` block on the entry (`context_size`, `gpu_layers`, `batch_size`, `threads`, `flash_attn`, `extra_args`) maps directly to CLI flags at spawn time. `llama-server` must be on `PATH` (or pin `server.binary` to an absolute path); first-run `-hf <repo>:<quant>` downloads land in `~/.cache/llama.cpp/`. To opt out and point the pipeline at an externally-launched server instead, set `base_url:` on the entry — the pipeline will skip the spawn and pre-flight `<base_url>/models` to verify the configured `model_id` is loaded.
+For local `driver: llamacpp` entries the pipeline spawns and owns one `llama-server` subprocess per entry by default — the `server:` block on the entry (`context_size`, `gpu_layers`, `batch_size`, `threads`, `flash_attn`, `extra_args`) maps directly to CLI flags at spawn time. `llama-server` must be on `PATH` (or pin `server.binary` to an absolute path); first-run `-hf <repo>:<quant>` downloads land in `~/.cache/llama.cpp/`. Set `local_path:` on the entry to load a `.gguf` already on disk (via `-m`) instead of downloading from HuggingFace; `model_id` then becomes the alias served at `/v1/models` (via `-a`). To opt out and point the pipeline at an externally-launched server instead, set `base_url:` on the entry — the pipeline will skip the spawn and pre-flight `<base_url>/models` to verify the configured `model_id` is loaded.
 
 ### Docker Execution
 

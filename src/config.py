@@ -40,6 +40,11 @@ class LlamaCppServerArgs(BaseModel):
 class LlamaCppLocalModelParams(BaseModel):
     driver: Literal['llamacpp']
     model_id: str
+    # When set: load the GGUF from this local path via `-m`, using `model_id`
+    # as the served alias (`-a`). When unset: fall back to `-hf <model_id>`
+    # and let `llama-server` download from HuggingFace into
+    # `~/.cache/llama.cpp/`. Ignored in external-server mode (`base_url` set).
+    local_path: FilePath | None = None
     # When set: the pipeline assumes an externally-managed `llama-server` is
     # live at this URL (the legacy contract). When unset: the pipeline spawns
     # and owns a `llama-server` process for the lifetime of this model's

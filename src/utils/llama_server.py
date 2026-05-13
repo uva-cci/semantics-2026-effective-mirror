@@ -63,7 +63,9 @@ class LlamaServerManager:
 
     # How long to wait for `/v1/models` to start responding. First-time
     # `-hf <repo>:<quant>` launches download multi-GB GGUFs into
-    # `~/.cache/llama.cpp/`, so this needs to be generous.
+    # `~/.cache/llama.cpp/`, so this needs to be generous. Local-path
+    # launches (`-m`) skip the download and become ready much faster, but
+    # the same generous ceiling does no harm.
     _READINESS_TIMEOUT_S: float = 30 * 60.0
     _READINESS_INITIAL_BACKOFF_S: float = 0.5
     _READINESS_MAX_BACKOFF_S: float = 5.0
@@ -113,9 +115,12 @@ class LlamaServerManager:
                 )
             binary = resolved
 
-        argv: list[str] = [
-            binary,
-            "-hf", self.cfg.model_id,
+        argv: list[str] = [binary]
+        if self.cfg.local_path is not None:
+            argv += ["-m", str(self.cfg.local_path), "-a", self.cfg.model_id]
+        else:
+            argv += ["-hf", self.cfg.model_id]
+        argv += [
             "--host", s.host,
             "--port", str(self.port),
             "--parallel", str(self.parallel),
