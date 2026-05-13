@@ -3,6 +3,7 @@ import hashlib
 import json
 import logging
 import os
+import sys
 import threading
 import uuid
 from datetime import datetime, timezone
@@ -14,6 +15,8 @@ import jsonschema
 import jsonschema.exceptions
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 from pydantic import BaseModel, Field
+from tqdm import tqdm
+from tqdm.contrib.logging import logging_redirect_tqdm
 
 from src.config import Config, DSLConfig, ModelConfig
 from src.utils.models import (
@@ -66,13 +69,9 @@ def load_completed_cell_keys(fp: Path) -> set[str]:
         completed.add(key)
 
     if legacy:
-        logging.info(
-            f"{legacy} legacy row(s) in {fp} ignored for resume (no cell_key)"
-        )
+        logging.info(f"{legacy} legacy row(s) in {fp} ignored for resume (no cell_key)")
     if completed:
-        logging.info(
-            f"Resume: found {len(completed)} completed cell(s) in {fp}"
-        )
+        logging.info(f"Resume: found {len(completed)} completed cell(s) in {fp}")
     return completed
 
 
@@ -162,7 +161,9 @@ class MirroringPipeline:
         self.tmpl_legenda = self.tmpl_env.get_template("legenda.jinja")
         self.tmpl_refine = self.tmpl_env.get_template("refine.jinja")
         self.tmpl_error_decode = self.tmpl_env.get_template("error_decode.jinja")
-        self.tmpl_error_validation = self.tmpl_env.get_template("error_validation.jinja")
+        self.tmpl_error_validation = self.tmpl_env.get_template(
+            "error_validation.jinja"
+        )
 
         # DSL name -> raw JSON-schema text
         self.dsl_schemas: dict[str, str] = {}
@@ -226,10 +227,16 @@ class MirroringPipeline:
         # the previous one, masking the backend-level concurrency cap and
         # stalling the first datapoints behind one (scenario, model)'s
         # legenda lock.
+        # Tracked per model: the pending tasks (this run will execute) and the
+        # count of cells already on disk from a prior run. The skipped count is
+        # carried separately so the progress bar can render `skipped/total`
+        # rather than `0/pending` — otherwise a resumed run looks like it's
+        # starting from zero even when most cells are already done.
         model_runs: list[
             tuple[
                 ModelConfig,
                 list[tuple[Scenario, DSLConfig, AblationFlags, InferenceParams, str]],
+                int,
             ]
         ] = []
         for model_cfg in self.cfg.models:
@@ -252,7 +259,9 @@ class MirroringPipeline:
                     dsl,
                     abl,
                     params,
-                    compute_cell_key(model_cfg.name, scenario.id, dsl.name, abl, params),
+                    compute_cell_key(
+                        model_cfg.name, scenario.id, dsl.name, abl, params
+                    ),
                 )
                 for scenario in self.scenarios
                 for dsl in self.cfg.dsl
@@ -267,9 +276,35 @@ class MirroringPipeline:
                 f"Dispatching {len(pending)} datapoint(s) for {model_cfg.name} "
                 f"(skipped {skipped} already complete)"
             )
-            model_runs.append((model_cfg, pending))
+            model_runs.append((model_cfg, pending, skipped))
 
         concurrency_cfg = self.cfg.inference.concurrency
+
+        # Preallocate one progress bar per model at fixed `position` so bars
+        # stay anchored even as local models sequentialize behind their
+        # per-backend semaphore. `leave=True` keeps finished bars on screen at
+        # 100% rather than vacating a slot a later bar would shift into. On
+        # non-TTY stdout (CI, redirected to file) tqdm renders nothing and the
+        # dispatch / done INFO lines remain the progress signal.
+        #
+        # `total = len(pending) + skipped` so the denominator reflects the
+        # full per-model workload; `initial = skipped` jumps the bar straight
+        # to the resume point so a re-run picks up at the correct percentage
+        # instead of restarting from 0/N.
+        bars: dict[str, tqdm] = {
+            model_cfg.name: tqdm(
+                total=len(pending) + skipped,
+                initial=skipped,
+                desc=model_cfg.name,
+                unit="cell",
+                position=i,
+                leave=True,
+                dynamic_ncols=True,
+                mininterval=0.2,
+                disable=not sys.stdout.isatty(),
+            )
+            for i, (model_cfg, pending, skipped) in enumerate(model_runs)
+        }
 
         async def _run_one_model(
             model_cfg: ModelConfig,
@@ -277,6 +312,7 @@ class MirroringPipeline:
                 tuple[Scenario, DSLConfig, AblationFlags, InferenceParams, str]
             ],
             pool_size: int,
+            bar: tqdm,
         ) -> None:
             # Resume short-circuit: skip *before* `acquire_model` so a fully
             # already-complete managed-llama.cpp entry doesn't pay the
@@ -287,7 +323,7 @@ class MirroringPipeline:
 
             async with acquire_model(model_cfg, concurrency_cfg) as model:
                 tasks = [
-                    self._run_task(scenario, dsl, model, abl, params, cell_key)
+                    self._run_task(scenario, dsl, model, abl, params, cell_key, bar)
                     for scenario, dsl, abl, params, cell_key in pending
                 ]
 
@@ -333,25 +369,39 @@ class MirroringPipeline:
         # group can't kill the rest mid-run. Surface what gather swallows so
         # a failed group (e.g. llama-server crashed at startup) is visible
         # in the log instead of silently turning into "Experiment completed".
-        results = await asyncio.gather(
-            *(
-                _run_one_model(
-                    model_cfg,
-                    pending,
-                    getattr(concurrency_cfg, model_class_for(model_cfg).BACKEND_KEY),
+        #
+        # `logging_redirect_tqdm` routes log records through `tqdm.write` so
+        # ✗ ERROR / ⤼ INFO / "Done with model" lines scroll cleanly above the
+        # bars instead of clobbering them. The wrap covers the writer thread's
+        # drain too, so its "closed" line lands above the bars before they're
+        # taken down by `bar.close()` in the finally.
+        try:
+            with logging_redirect_tqdm():
+                results = await asyncio.gather(
+                    *(
+                        _run_one_model(
+                            model_cfg,
+                            pending,
+                            getattr(
+                                concurrency_cfg, model_class_for(model_cfg).BACKEND_KEY
+                            ),
+                            bars[model_cfg.name],
+                        )
+                        for model_cfg, pending, _skipped in model_runs
+                    ),
+                    return_exceptions=True,
                 )
-                for model_cfg, pending in model_runs
-            ),
-            return_exceptions=True,
-        )
-        for (model_cfg, _), result in zip(model_runs, results):
-            if isinstance(result, BaseException):
-                logging.error(
-                    f"✗ {model_cfg.name}: {type(result).__name__}: {result}"
-                )
+                for (model_cfg, _pending, _skipped), result in zip(model_runs, results):
+                    if isinstance(result, BaseException):
+                        logging.error(
+                            f"✗ {model_cfg.name}: {type(result).__name__}: {result}"
+                        )
 
-        self.output.put(None)  # tell the writer to finish
-        t.join()
+                self.output.put(None)  # tell the writer to finish
+                t.join()
+        finally:
+            for bar in bars.values():
+                bar.close()
 
         logging.info(f"Pipeline {self.__class__.__name__} completed")
 
@@ -363,6 +413,7 @@ class MirroringPipeline:
         ablation: AblationFlags,
         params: InferenceParams,
         cell_key: str,
+        bar: tqdm,
     ) -> None:
         try:
             dp = await self.produce_datapoint(
@@ -378,14 +429,24 @@ class MirroringPipeline:
                 f"cell={cell_key}: {type(e).__name__}: {e}"
             )
             raise
-        # Queue.put is thread-safe and non-blocking on an unbounded queue, so it
-        # is safe to call directly from the event loop. The writer thread is the
-        # sole consumer, which serialises file writes.
-        self.output.put(dp)
-        logging.info(
-            f"  ✓ {model.name} | scenario={scenario.id} dsl={dsl.name} "
-            f"syntax={ablation.syntax} few_shot={ablation.few_shot}"
-        )
+        else:
+            # Queue.put is thread-safe and non-blocking on an unbounded queue, so it
+            # is safe to call directly from the event loop. The writer thread is the
+            # sole consumer, which serialises file writes.
+            self.output.put(dp)
+            # Demoted from INFO: under default verbosity the per-model progress
+            # bar's increment is the success signal; the per-cell trail stays
+            # available under -d/--debug for forensics.
+            logging.debug(
+                f"  ✓ {model.name} | scenario={scenario.id} dsl={dsl.name} "
+                f"syntax={ablation.syntax} few_shot={ablation.few_shot}"
+            )
+        finally:
+            # Advance exactly once per dispatched cell, regardless of outcome:
+            # the bar tracks "cells settled", not "cells succeeded". The
+            # success/failure split is reported by the per-model summary line
+            # in `_run_one_model`.
+            bar.update(1)
 
     def writer_worker(self, fp: Path):
         logging.info(f"Writer worker for {self.__class__.__name__} started")
@@ -564,9 +625,7 @@ class MirroringPipeline:
                 break
             errors.append(err)
 
-            refine = self.tmpl_refine.render(
-                {"previous": output.text, "error": err}
-            )
+            refine = self.tmpl_refine.render({"previous": output.text, "error": err})
             prompt = base + "\n\n" + refine
             logging.debug(prompt)
 
@@ -648,10 +707,12 @@ class MirroringPipeline:
             # nested-oneOf wrapper.
             branches: list[dict[str, str]] = []
             if e.context:
+
                 def _leaf(s: jsonschema.ValidationError) -> jsonschema.ValidationError:
                     while s.context:
                         s = jsonschema.exceptions.best_match(s.context)
                     return s
+
                 # `e.context` flattens to leaves across all branches and may
                 # repeat the same message verbatim (typically the
                 # `additionalProperties: false` failure, which fires on every

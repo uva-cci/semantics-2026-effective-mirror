@@ -34,6 +34,12 @@ class LlamaCppServerArgs(BaseModel):
     batch_size: int | None = None         # -> -b / --batch-size
     threads: int | None = None            # -> -t / --threads
     flash_attn: bool | None = None        # -> --flash-attn
+    # How long the manager waits for `/v1/models` to advertise `model_id`
+    # before raising `TimeoutError`. -1 (default) means "wait indefinitely",
+    # which is what we want for first-time GGUF downloads of arbitrary size.
+    # A positive value caps the wait — useful in CI or to fail fast on a
+    # misconfigured host.
+    probe_timeout_s: float = -1.0
     extra_args: list[str] = []            # last-resort escape hatch
 
 
@@ -67,6 +73,7 @@ class CloudProvider(StrEnum):
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
     GOOGLE = "google"
+    CUSTOM = "custom"
 
 
 class CloudModelConfig(BaseModel):
@@ -84,13 +91,16 @@ class CloudModelConfig(BaseModel):
     api_key_env: str | None = None
 
     @model_validator(mode="after")
-    def _overrides_only_for_openai(self) -> Self:
-        if self.provider is not CloudProvider.OPENAI and (
+    def _validate_base_url(self) -> Self:
+        if self.provider in (CloudProvider.ANTHROPIC, CloudProvider.GOOGLE) and (
             self.base_url is not None or self.api_key_env is not None
         ):
             raise ValueError(
-                "base_url / api_key_env are only supported on provider=openai entries"
+                "base_url / api_key_env are only supported on provider=openai "
+                "or provider=custom entries"
             )
+        if self.provider is CloudProvider.CUSTOM and self.base_url is None:
+            raise ValueError("provider=custom requires base_url")
         return self
 
 
@@ -106,6 +116,7 @@ class InferenceConcurrencyConfig(BaseModel):
     openai: int = 8
     anthropic: int = 4
     google: int = 4
+    custom: int = 8
 
 
 class InferenceConstants(BaseModel):
@@ -168,6 +179,16 @@ class GoogleInferenceConfig(BaseModel):
     reasoning_budget: list[int]
 
 
+class CustomInferenceConfig(BaseModel):
+    """No required per-backend axes — the endpoint is opaque from our POV.
+
+    Sweep `temperature` / `top_p` via the global `inference.defaults` block or
+    a per-entry `inference_override.defaults`. Endpoint-specific knobs can be
+    added later if a use case calls for them.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+
 class InferencePerBackend(BaseModel):
     """Per-backend sweep matrices. Every field defaults to `None`.
 
@@ -183,6 +204,7 @@ class InferencePerBackend(BaseModel):
     openai: OpenAIInferenceConfig | None = None
     anthropic: AnthropicInferenceConfig | None = None
     google: GoogleInferenceConfig | None = None
+    custom: CustomInferenceConfig | None = None
 
 
 class InferenceParamsConfig(BaseModel):
@@ -244,6 +266,8 @@ def _per_backend_class_for(
                 return AnthropicInferenceConfig, frozenset({"top_k"})
             case CloudProvider.GOOGLE:
                 return GoogleInferenceConfig, frozenset({"top_k"})
+            case CloudProvider.CUSTOM:
+                return CustomInferenceConfig, frozenset()
     raise ValueError(f"Cannot map meta to backend class: {meta!r}")
 
 

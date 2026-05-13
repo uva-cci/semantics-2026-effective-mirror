@@ -375,6 +375,22 @@ class OpenAIInferenceModel(InferenceModel):
         )
 
 
+class CustomInferenceModel(OpenAIInferenceModel):
+    """OpenAI-compatible client for non-OpenAI endpoints (proxies, routers).
+
+    Inherits the OpenAI SDK plumbing from `OpenAIInferenceModel` but carries
+    its own `BACKEND_KEY` so the matrix, semaphore, and log lines name the
+    entry honestly. Consumes only universal sampling axes — the parent's
+    OpenAI-specific axes (`reasoning_effort`, `text_verbosity`) stay absent
+    on the request because `generate` skips any `InferenceParams` field set
+    to `None`.
+    """
+
+    BACKEND_KEY = "custom"
+    CONSUMES_DEFAULTS = frozenset({"temperature", "top_p"})
+    CONSUMES_CONSTANTS = frozenset({"seed"})
+
+
 anthropic_client: AsyncAnthropic | None = None
 
 
@@ -629,6 +645,9 @@ def get_model(
                 case "google":
                     sem = _get_semaphore("google", concurrency.google)
                     return GoogleInferenceModel(cfg.name, cloud_meta, sem)
+                case "custom":
+                    sem = _get_semaphore("custom", concurrency.custom)
+                    return CustomInferenceModel(cfg.name, cloud_meta, sem)
                 case _:
                     raise ValueError(f"Unknown provider {cloud_meta.provider}")
     raise ValueError()
@@ -658,6 +677,8 @@ def model_class_for(cfg: ModelConfig) -> type[InferenceModel]:
                     return AnthropicInferenceModel
                 case "google":
                     return GoogleInferenceModel
+                case "custom":
+                    return CustomInferenceModel
                 case _:
                     raise ValueError(f"Unknown provider {cloud_meta.provider}")
     raise ValueError()
