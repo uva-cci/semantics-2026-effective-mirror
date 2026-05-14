@@ -23,10 +23,11 @@ without touching the LLM matrix.
 ## Layout
 
 ```
-main.py                         CLI entrypoint (argparse subcommands: run, analyze)
+main.py                         CLI entrypoint (argparse subcommands: run, analyze, visualize)
 src/config.py                   Pydantic config models + YAML loader
 src/pipeline.py                 Mirroring pipeline (encode/decode, resume) — production only
 src/analyze.py                  Standalone scoring: NDJSON → scores CSV
+src/visualize.py                Paper-figure rendering: scores CSV → PDF figures + summary CSV
 src/utils/models.py             Backend dispatch (Ollama, OpenAI, Anthropic, Google)
 src/utils/embeddings.py         Sentence-transformer encoders
 src/utils/structural.py         Structural similarity scoring for nested JSON
@@ -85,6 +86,33 @@ Reads an NDJSON produced by `run`, computes structural ratios (`alignment`,
 semantic cosine similarities, and emits a CSV with one row per cell.
 Useful for swapping the encoder set or adding new metrics without re-running
 inference. In-place rewrite is rejected — the original NDJSON stays immutable.
+
+### `visualize INPUT_CSV` — render paper figures from a scores CSV
+
+| Flag           | Default                              | Purpose                                                                  |
+| -------------- | ------------------------------------ | ------------------------------------------------------------------------ |
+| `-o, --output` | `outputs/figures/<input-stem>/`      | Output directory for the three PDF figures and `summary_stats.csv`.       |
+
+Reads a scores CSV produced by `analyze` and emits three publication-quality
+PDFs plus a `summary_stats.csv` that lists every numeric value plotted
+(means, CIs, medians, correlation coefficients). Every figure facets by
+model — there is no across-models aggregation. Figures:
+
+- `fig1_ablation.pdf` — 2×2 factorial effect of `syntax` and `few_shot`
+  per metric, one row per model. A top strip (one panel per model) shows
+  the `sym1 ∧ sym2` success rate behind the means.
+- `fig2_dsl.pdf` — DSL comparison faceted by model (rows) × metric (cols),
+  restricted to the best-supported ablation (`syntax=1, few_shot=1`) and
+  to successful round-trips. `matching` is dcpl-only by construction
+  (odrl is dict-vs-dict at the top level, so there is nothing to pair) —
+  the odrl side renders an `n/a` annotation rather than fabricated data.
+- `fig3_correlation.pdf` — scatter of the structural composite (mean of
+  populated ratios) against semantic similarity, faceted by DSL (rows) ×
+  model (cols), with Spearman ρ and Pearson r per panel.
+
+Does not require a config file; it consumes the CSV directly. Each figure
+is written via an atomic rename, so a failed run never overwrites a
+previous PDF.
 
 ## Configuration
 

@@ -3,11 +3,14 @@ import csv
 import json
 import logging
 import os
+import sys
 from pathlib import Path
 from typing import Any
 
 import torch
 from sentence_transformers import SentenceTransformer
+from tqdm import tqdm
+from tqdm.contrib.logging import logging_redirect_tqdm
 
 from src.config import Config
 from src.pipeline import MirroringPipelineOutput
@@ -54,6 +57,15 @@ def _iter_rows(fp: Path):
             if not line:
                 continue
             yield json.loads(line)
+
+
+def _count_rows(fp: Path) -> int:
+    n = 0
+    with fp.open("r", encoding="utf-8") as f:
+        for raw in f:
+            if raw.strip():
+                n += 1
+    return n
 
 
 def _structural_for(row: MirroringPipelineOutput) -> StructuralScores | None:
@@ -131,6 +143,7 @@ async def analyze_ndjson(
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = output_path.with_suffix(output_path.suffix + ".tmp")
+    total_rows = _count_rows(input_path)
     scored = 0
     missing_scenario = 0
 
@@ -138,21 +151,33 @@ async def analyze_ndjson(
         writer = csv.writer(f)
         writer.writerow(CSV_COLUMNS)
 
-        for raw_row in _iter_rows(input_path):
-            row = MirroringPipelineOutput.model_validate(raw_row)
-            scenario_text = scenarios.get(row.scenario_id)
-            if scenario_text is None:
-                missing_scenario += 1
-                logging.warning(
-                    f"scenario_id={row.scenario_id} not found in scenarios; "
-                    f"semantic score will be empty for cell_key={row.cell_key}"
-                )
-                scenario_text = ""
+        with logging_redirect_tqdm(), tqdm(
+            total=total_rows,
+            desc="analyze",
+            unit="row",
+            leave=True,
+            dynamic_ncols=True,
+            mininterval=0.2,
+            disable=not sys.stdout.isatty(),
+        ) as bar:
+            for raw_row in _iter_rows(input_path):
+                row = MirroringPipelineOutput.model_validate(raw_row)
+                scenario_text = scenarios.get(row.scenario_id)
+                if scenario_text is None:
+                    missing_scenario += 1
+                    logging.warning(
+                        f"scenario_id={row.scenario_id} not found in scenarios; "
+                        f"semantic score will be empty for cell_key={row.cell_key}"
+                    )
+                    scenario_text = ""
 
-            structural = _structural_for(row)
-            semantic = await _semantic_for(row, scenario_text, encoder, encoder_lock)
-            writer.writerow(_row_to_csv(row, structural, semantic))
-            scored += 1
+                structural = _structural_for(row)
+                semantic = await _semantic_for(
+                    row, scenario_text, encoder, encoder_lock
+                )
+                writer.writerow(_row_to_csv(row, structural, semantic))
+                scored += 1
+                bar.update(1)
 
         f.flush()
         os.fsync(f.fileno())

@@ -7,6 +7,7 @@ from pathlib import Path
 from src.analyze import run_analyze
 from src.config import load_config
 from src.pipeline import MirroringPipeline, Scenario
+from src.visualize import run_visualize
 
 
 def _cmd_run(args: argparse.Namespace) -> None:
@@ -32,6 +33,13 @@ def _cmd_analyze(args: argparse.Namespace) -> None:
     )
     run_analyze(cfg, input_path, output_path)
     logging.info(f"Analysis written to {output_path}")
+
+
+def _cmd_visualize(args: argparse.Namespace) -> None:
+    input_path: Path = args.input
+    output_dir: Path = args.output or (Path("outputs/figures") / input_path.stem)
+    run_visualize(input_path, output_dir)
+    logging.info(f"Figures written to {output_dir}")
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -118,6 +126,31 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         ),
     )
     p_analyze.set_defaults(func=_cmd_analyze)
+
+    p_viz = sub.add_parser(
+        "visualize",
+        help="Render paper-ready PDF figures from a scores CSV.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    p_viz.add_argument(
+        "input",
+        type=Path,
+        metavar="INPUT_CSV",
+        help="Path to the scores CSV produced by `mirror analyze`.",
+    )
+    p_viz.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        required=False,
+        default=None,
+        metavar="DIR",
+        help=(
+            "Output directory for the figure PDFs and `summary_stats.csv`. "
+            "Defaults to `outputs/figures/<input-stem>/`."
+        ),
+    )
+    p_viz.set_defaults(func=_cmd_visualize)
 
     return parser.parse_args(argv)
 

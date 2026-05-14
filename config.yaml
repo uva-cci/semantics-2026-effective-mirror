@@ -14,47 +14,36 @@ dsl:
     schema: inputs/dsl/odrl/schema.json
 
 models:
-  - name: qwen3-30b-a3b-q4
-    meta:
-      kind: local
-      params:
-        driver: llamacpp
-        model_id: Qwen/Qwen3-30B-A3B-GGUF:Q4_K_M
-        server:
-          context_size: 32768
-          gpu_layers: 999
-          flash_attn: true
-    # Qwen-recommended sampling profile.
-    inference_override:
-      defaults:
-        temperature: [0.6]
-      per_backend:
-        truncation:
-          - { name: "qwen_recommended", top_p: 0.95, min_p: 0.05 }
-      constants:
-        top_k: 20
+  # - name: qwen3-30b-a3b-q4
+  #   meta:
+  #     kind: local
+  #     params:
+  #       driver: llamacpp
+  #       model_id: Qwen/Qwen3-30B-A3B-GGUF:Q4_K_M
+  #       server:
+  #         context_size: 32768
+  #         gpu_layers: 999
+  #         flash_attn: true
+  #   # Qwen-recommended sampling profile.
+  #   inference_override:
+  #     defaults:
+  #       temperature: [0.6]
+  #     per_backend:
+  #       truncation:
+  #         - { name: "qwen_recommended", top_p: 0.95, min_p: 0.05 }
+  #     constants:
+  #       top_k: 20
 
-  - name: gpt-oss-20b-q4
+  - name: claude-sonnet-4.6
     meta:
-      kind: local
-      params:
-        driver: llamacpp
-        model_id: unsloth/gpt-oss-20b-GGUF:Q4_K_M
-        server:
-          context_size: 32768
-          gpu_layers: 999
-          flash_attn: true
-    # OpenAI-recommended sampling for gpt-oss: temperature=1.0, top_p=1.0
-    # (full distribution, no truncation). top_k=0 disables top-k filtering
-    # in llama.cpp, which otherwise defaults to 40.
+      kind: cloud
+      provider: custom
+      model_id: claude-sonnet-4.6
+      base_url: http://0.0.0.0:8000/v1
     inference_override:
       defaults:
-        temperature: [1.0]
-      per_backend:
-        truncation:
-          - { name: "gpt_oss_recommended", top_p: 1.0, min_p: null }
-      constants:
-        top_k: 0
+        temperature: [0.5]
+        top_p: [0.5]
 
 encoding:
   name: pplx-embed-v1-0.6b
@@ -63,5 +52,6 @@ encoding:
 inference:
   concurrency:
     llamacpp: 1
+    custom: 1
   constants:
     seed: 42

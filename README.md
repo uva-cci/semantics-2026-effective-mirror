@@ -22,6 +22,7 @@ uv sync                                                        # install depende
 uv run mirror --config config.yaml run                         # produce datapoints (encode → decode → re-encode)
 uv run mirror --config config.smoke.yaml run                   # quick end-to-end smoke check
 uv run mirror --config config.yaml analyze outputs/run.ndjson  # score a previously-produced NDJSON → CSV
+uv run mirror visualize outputs/run.scores.csv                 # render paper-ready PDF figures from a scores CSV
 uv run mirror --help                                           # see all options
 ```
 
@@ -29,6 +30,7 @@ The CLI has two independent subcommands:
 
 - **`run`** — drives the LLM matrix and writes one NDJSON row per cell (`outputs/output-<timestamp>.ndjson` by default). Production only; no scoring.
 - **`analyze INPUT_NDJSON`** — reads an NDJSON produced by `run` and emits a scores CSV (default `outputs/<input-stem>.scores.csv`). One row per cell, with structural ratios and per-encoder semantic similarities as columns. Always rewritten in full (analysis is cheap; rerun freely after swapping encoders or adding metrics).
+- **`visualize INPUT_CSV`** — reads a scores CSV and renders three paper-ready PDF figures (ablation effects, DSL comparison, structural-vs-semantic agreement) plus a `summary_stats.csv` with the underlying numbers. Defaults to `outputs/figures/<input-stem>/`; override with `-o`.
 
 Outputs land under `outputs/` (gitignored); inputs (scenarios + DSL schemas/examples) live under `inputs/`.
 
